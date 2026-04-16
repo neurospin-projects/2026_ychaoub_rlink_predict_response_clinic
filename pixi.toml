@@ -1,0 +1,17 @@
+[workspace]
+authors = ["EDOUARD DUCHESNAY <edouard.duchesnay@gmail.com>"]
+channels = ["conda-forge"]
+name = "2026_ychaoub_rlink_predict_response_clinic"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.14.4,<3.15"
+ipykernel = ">=7.2.0,<8"
+scikit-learn = ">=1.8.0,<2"
+pandas = ">=3.0.2,<4"
+statsmodels = ">=0.14.6,<0.15"
+seaborn = ">=0.13.2,<0.14"
+openpyxl = ">=3.1.5,<4"
