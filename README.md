@@ -50,6 +50,13 @@ Follow: [Cookiecutter Data Science](https://cookiecutter-data-science.drivendata
 └─── models             <- Trained and serialized models, model predictions, or model summaries
 ```
 
+
+### Clinical variable
+
+Input : See make_dataset.py
+Output : See make_dataset.py
+
+
 ### TODO
 
 - Descriptive statistics to add to univariate table
