@@ -1,6 +1,4 @@
 # Read files
-
-
 import pandas as pd
 import os
 
@@ -8,17 +6,48 @@ import os
 # %% Set path to inout data and output results according to your local configuration
 
 INPUT = "/neurospin/rlink/PUBLICATION/rlink-ecrf/"
+INPUT_SUPP = "./data/study-rlink_dataset-clinical_type-summary_version-20260220.xlsx"
 OUTPUT = './data/'
 
-# %%  1. Read and manipulate data
-# ===============================
 
-# 1.1 Variables from file "dataset-clinical_mod-inclusion_version-2.tsv"
 
+# %%  Read and manipulate data
+# ============================
+
+# Supplemantary file provided by F. Bellivier in 2026
+supp_df = pd.read_excel(INPUT_SUPP)
+assert supp_df.shape == (169, 32)
+
+# Indlusion file
 vars = ["participant_id", "AGE", "SEX"]
 inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv", sep='\t', na_values=['ND'])
 inclusion_df = inclusion_df[vars]
 assert inclusion_df.shape == (168, 3)
+# SEX: 1 = Male, 2 = Female , 3 = Other
+
+
+# Baseline
+baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
+
+# %%  Select columns
+# ==================
+
+# %% 1. Selection from R-Link datasets
+# ====================================
+#
+# Use inclusion_df & baseline_df to replicate selection from:
+# /neurospin/signatures/temp_thibault/2024_rlink_predict_response/Clinical/RLINK-1-Clinical.ipynb
+
+# %% 2. merge with supplementary data supp_df
+# ===========================================
+
+
+# %%  EXEMPLE: Read and manipulate data
+# =====================================
+
+# 1.1 Variables from file "dataset-clinical_mod-inclusion_version-2.tsv"
+
+
 
 # 1.2 Variables from file "dataset-clinical_mod-baseline_version-2.tsv"
 
@@ -59,13 +88,13 @@ assert outcome.shape == (168, 2)
 
 
 # %% 2. Merge tables using "participant_id" (used by default)
-# ===========================================================
+
 
 table = pd.merge(pd.merge(pd.merge(df1, df2), df3), df4)
 table.shape == (141, 36)
 
 # %% 3. Save to excel file
-# ========================
+#
 
 table.to_excel(OUTPUT + "data_demoSmokLiMarsResponse_python.xlsx", index=False)
 table.to_csv(OUTPUT + "rlink-predict-response-clinic_v-20260416", index=False)
