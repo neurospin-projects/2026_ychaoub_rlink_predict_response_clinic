@@ -24,11 +24,9 @@ supp_df = supp_df.drop(supp_df.index[0]) #remove the first row from the data
 
 
 # Inclusion file
-vars =["participant_id", "CENTERNUM", "SEX", "AGE"]
 inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv", sep='\t', na_values=['ND'])
-inclusion_df = inclusion_df[vars]
-assert inclusion_df.shape == (168, 4)
-# SEX: 1 = Male, 2 = Female , 3 = Other
+
+
 
 
 # Baseline
@@ -36,6 +34,12 @@ baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv",
 
 # %%  Select columns
 # ==================
+
+vars =["participant_id", "CENTERNUM", "SEX", "AGE"] # SEX: 1 = Male, 2 = Female , 3 = Other
+inclusion_df = inclusion_df[vars]
+assert inclusion_df.shape == (168, 4)
+
+
 
 # %% 1. Selection from R-Link datasets
 # ====================================
