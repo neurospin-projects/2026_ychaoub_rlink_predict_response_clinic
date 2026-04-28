@@ -60,7 +60,7 @@ assert inclusion_df.shape == (168, 4)
 
 
 # 1.2 Variables from file "dataset-clinical_mod-baseline_version-2.tsv"
-
+#Selected
 vars = ["participant_id", "WHOA1A_PLI", "HEIGHT_PRELI", "WEIGHT_PRELI",
         "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI",
         "MARS6_PRELI", "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI", "MARS10_PRELI",
