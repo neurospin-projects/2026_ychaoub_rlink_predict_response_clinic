@@ -1,12 +1,13 @@
 # Read files
 import pandas as pd
 import os
-print("hi")
+
 
 # %% Set path to inout data and output results according to your local configuration
 
 INPUT = "/neurospin/rlink/PUBLICATION/rlink-ecrf/"
-INPUT_SUPP = "./data/study-rlink_dataset-clinical_type-summary_version-20260220.xlsx"
+INPUT_SUPP = "/neurospin/signatures/2026_ychaoub_rlink_predict_response_clinic/data/study-rlink_dataset-clinical_type-summary_version-20260220.xlsx"
+#INPUT_SUPP = "./data/study-rlink_dataset-clinical_type-summary_version-20260220.xlsx"
 OUTPUT = './data/'
 
 
@@ -17,12 +18,16 @@ OUTPUT = './data/'
 # Supplemantary file provided by F. Bellivier in 2026
 supp_df = pd.read_excel(INPUT_SUPP)
 assert supp_df.shape == (169, 32)
+supp_df.columns = supp_df.iloc[0] #set the first row as the header
+supp_df = supp_df.drop(supp_df.index[0]) #remove the first row from the data
 
-# Indlusion file
-vars = ["participant_id", "AGE", "SEX"]
+
+
+# Inclusion file
+vars =["participant_id", "CENTERNUM", "SEX", "AGE"]
 inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv", sep='\t', na_values=['ND'])
 inclusion_df = inclusion_df[vars]
-assert inclusion_df.shape == (168, 3)
+assert inclusion_df.shape == (168, 4)
 # SEX: 1 = Male, 2 = Female , 3 = Other
 
 
