@@ -35,6 +35,7 @@ baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv",
 # %%  Select columns
 # ==================
 
+
 vars =["participant_id", "CENTERNUM", "SEX", "AGE"] # SEX: 1 = Male, 2 = Female , 3 = Other
 inclusion_df = inclusion_df[vars]
 assert inclusion_df.shape == (168, 4)
