@@ -61,12 +61,99 @@ assert inclusion_df.shape == (168, 4)
 
 # 1.2 Variables from file "dataset-clinical_mod-baseline_version-2.tsv"
 #Selected
-vars = ["participant_id", "WHOA1A_PLI", "HEIGHT_PRELI", "WEIGHT_PRELI",
-        "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI",
-        "MARS6_PRELI", "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI", "MARS10_PRELI",
-        "QIDSTSC_PRELI", "BRMSTSC_PRELI"]
+
+## All other relevant variables from base dataframe
+
+VARS_TO_INCLUDE_PRELI = [
+    "participant_id",
+    #Thymic state at inclusion
+    "MOODYN_PRELI", 
+    "TYPEP_PRELI",
+    "PS_PRELI",
+    "MIX_PRELI",
+    "DATSTEPD_PRELI",
+    "HOSP_PRELI", 
+   # "RSNINILI_PRELI", #NOT IN BASE
+   # "OTHRSNINILI_PRELI", #NOT IN BASE
+    #Physical preliminary exam
+    "WEIGHT_PRELI",
+    "HEIGHT_PRELI",
+    "WAIST_PRELI",
+    "SBP_PRELI",
+    "DBP_PRELI",
+    # Relationship status, school, job, recent traumatic event
+    "RELSTAT_PRELI",
+    "ETHNICITY_PRELI",
+    "CORG_PRELI",
+    #"COUNTRY_PRELI", #NOT IN BASE
+    "LIVSIT_PRELI",
+    "RESIDENCE_PRELI",
+    "SCHOOL_PRELI",
+    "JOB_PRELI",
+    "EVNT_PRELI",
+    # Medication history
+    "CURRMED_PRELI",
+    # Biological 
+    "DATBIO_PRELI",
+    "NA_PRELI",
+    "K_PRELI",
+    "CL_PRELI",
+    "CA_PRELI",
+    "PROTEINS_PRELI",
+    "UREA_PRELI",
+    "CREAT_PRELI",
+    "EGFR_PRELI",
+    "MDRD_PRELI",
+    "CKDEPI_PRELI",
+    "TSH_PRELI",
+    "T3_PRELI",
+    "T4_PRELI",
+    "GLY_PRELI",
+    "TGC_PRELI",
+    "HDL_PRELI",
+    "LDL_PRELI",
+    "BHCG_PRELI",
+    "WBC_PRELI",
+    "HB_PRELI",
+    "HT_PRELI",
+    "PLT_PRELI",
+    "NP_PRELI",
+    "EOS_PRELI",
+    "LYMPH_PRELI",
+    "MONO_PRELI",
+    "FHIST_PLI", "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI", "PHCMBY_PLI",
+    "RCY1_PLI", "MDE1_PLI", "MDEH1_PLI", "MDEPS1_PLI", "MDEMC1_PLI", "MDETD1_PLI", 'HYPOE1_PLI', 'HYPOEH1_PLI', 'HYPOEMC1_PLI', 'HYPOETD1_PLI',
+    'MANE1_PLI', 'MANEH1_PLI', 'MANEPS1_PLI', 'MANEMC1_PLI', 'MANETD1_PLI', 
+    #"PATSEQ1_PLI", 
+    "NBH1_PLI", 
+    #"PATSEQM1_PLI", 
+    "TDH1_PLI", "OUTW1_PLI", "NBS1_PLI", 
+    "AD1_PLI", "SUD1_PLI", "MC1_PLI", "RCY2_PLI", "AGESTBD2_PLI", "BDNOW2_PLI", "AGENDBD2_PLI", 
+    'MDE2_PLI', 'MDEH2_PLI', 'MDEPS2_PLI', 'MDEMC2_PLI', 'MDETD2_PLI', 'AGEMDE2_PLI', 'HYPOE2_PLI', 'HYPOEH2_PLI', 'HYPOEMC2_PLI', 
+    'HYPOETD2_PLI', 'AGEHYPOE2_PLI', 'MANE2_PLI', 'MANEH2_PLI', 'MANEPS2_PLI', 'MANEMC2_PLI', 'MANETD2_PLI', 'AGEMANE2_PLI', 'PATSEQM2_PLI', 'NBH2_PLI', 'TDH2_PLI', 
+    'AGESTBH2_PLI', 'OUTW2_PLI', 'NBS2_PLI', 'AGES2_PLI', 'AD2_PLI', 'SUD2_PLI', 'MC2_PLI',
+]
+
+VARS_TO_INCLUDE_QUESTIONNAIRES = [
+    #DEPRESSION - QIDS 
+    "QIDSTSC_PRELI", #total score
+    "BRMSTSC_PRELI", #total score
+    #suicide risk
+    "SSRS1_PRELI", "SSRS2_PRELI", "SSRS3_PRELI", "SSRS4_PRELI", "SSRS5_PRELI", "SSRS6_PRELI", "SSRS6Y_PRELI",
+    #BPRS - Psychiatric symptom severity
+    "BPRSTSC_PRELI",
+    #Medication adherence: MARS, TRQ, BMQ
+    "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI", "MARS6_PRELI", "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI", "MARS10_PRELI",
+    "TRQ_PRELI", "TRQ1_PRELI", "TRQ2_PRELI", 
+    #"TRQ3_PRELI", 
+    "TRQ4_PRELI", "TRQ5_PRELI", "TRQ6_PRELI", "TRQ7_PRELI", "TRQ1B_PRELI", "TRQ2B_PRELI",
+    "BMQ1_PRELI", "BMQ2_PRELI", "BMQ3_PRELI", "BMQ4_PRELI", "BMQ5_PRELI", "BMQ6_PRELI", "BMQ7_PRELI", "BMQ8_PRELI", "BMQ9_PRELI", "BMQ10_PRELI", "BMQ11_PRELI", 
+    "BMQ12_PRELI", "BMQ13_PRELI", "BMQ14_PRELI", "BMQ15_PRELI", "BMQ16_PRELI", "BMQ17_PRELI", "BMQ18_PRELI",
+    'WHOA1A_PLI', 'WHOA1B_PLI', 'WHOA1C_PLI', 'WHOA1D_PLI', 'WHOA1E_PLI', 'WHOA1F_PLI', 'WHOA1G_PLI', 'WHOA1H_PLI'
+]
+
 baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
-baseline_df = baseline_df[vars]
+baseline_df = baseline_df[VARS_TO_INCLUDE_PRELI + VARS_TO_INCLUDE_QUESTIONNAIRES ]
 baseline_df["BMI"] = baseline_df["WEIGHT_PRELI"] / (baseline_df["HEIGHT_PRELI"] ** 2) * (100 ** 2)
 assert df2.shape == (168, 17)
 
