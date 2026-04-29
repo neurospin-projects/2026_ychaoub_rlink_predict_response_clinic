@@ -23,28 +23,30 @@ supp_df = supp_df.drop(supp_df.index[0]) #remove the first row from the data
 
 
 
-# Inclusion file
-inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv", sep='\t', na_values=['ND'])
-
-
-
-
-# Baseline
-baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
 
 # %%  Select columns
 # ==================
 
 
-vars =["participant_id", "CENTERNUM", "SEX", "AGE"] # SEX: 1 = Male, 2 = Female , 3 = Other
-inclusion_df = inclusion_df[vars]
-assert inclusion_df.shape == (168, 4)
+
 
 
 
 # %% 1. Selection from R-Link datasets
 # ====================================
-#
+
+## Loading data from files in ecrf repo
+
+meds = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_form-preLi_tab-med_version-3.tsv", delimiter = "\t") # la variable UNIT est juste une unité  (page 14)
+fhist = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_form-postLi_tab-famhist_version-3.tsv", delimiter = "\t", na_values= "ND")
+
+# Inclusion file
+inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv", sep='\t', na_values=['ND'])
+
+
+# Baseline
+baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
+
 # Use inclusion_df & baseline_df to replicate selection from:
 # /neurospin/signatures/temp_thibault/2024_rlink_predict_response/Clinical/RLINK-1-Clinical.ipynb
 
@@ -52,17 +54,19 @@ assert inclusion_df.shape == (168, 4)
 # ===========================================
 
 
+
 # %%  EXEMPLE: Read and manipulate data
 # =====================================
 
-# 1.1 Variables from file "dataset-clinical_mod-inclusion_version-2.tsv"
+# 1.1 Variables from file "dataset-clinical_mod-inclusion_version-3.tsv"
 
+vars =["participant_id", "CENTERNUM", "SEX", "AGE"] # SEX: 1 = Male, 2 = Female , 3 = Other
+inclusion_df = inclusion_df[vars]
+assert inclusion_df.shape == (168, 4)
 
-
-# 1.2 Variables from file "dataset-clinical_mod-baseline_version-2.tsv"
+# 1.2 Variables from file "dataset-clinical_mod-baseline_version-3.tsv"
 #Selected
 
-## All other relevant variables from base dataframe
 
 VARS_TO_INCLUDE_PRELI = [
     "participant_id",
@@ -155,7 +159,26 @@ VARS_TO_INCLUDE_QUESTIONNAIRES = [
 baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
 baseline_df = baseline_df[VARS_TO_INCLUDE_PRELI + VARS_TO_INCLUDE_QUESTIONNAIRES ]
 baseline_df["BMI"] = baseline_df["WEIGHT_PRELI"] / (baseline_df["HEIGHT_PRELI"] ** 2) * (100 ** 2)
-assert df2.shape == (168, 17)
+assert baseline_df.shape == (168, 164)
+
+
+
+#merge without data supp_df
+
+Base = baseline_df.merge(
+    inclusion_df,
+    left_on = "participant_id",
+    right_on = "participant_id",
+    how = "left"
+)
+
+Base["id"] = baseline_df["participant_id"].str.split("-", expand = True).iloc[:, 1].astype(int)
+
+
+
+
+## All other relevant variables from base dataframe
+
 
 # # 1.3 Variables from file "dataset-clinical_mod-visits_form-visit_version-2.tsv
 # vars = ["participant_id", "FORM_F_VISIT",
@@ -187,7 +210,7 @@ assert outcome.shape == (168, 2)
 # %% 2. Merge tables using "participant_id" (used by default)
 
 
-table = pd.merge(pd.merge(pd.merge(df1, df2), df3), df4)
+table = pd.merge(pd.merge(inclusion_df, baseline_df), outcome)
 table.shape == (141, 36)
 
 # %% 3. Save to excel file
