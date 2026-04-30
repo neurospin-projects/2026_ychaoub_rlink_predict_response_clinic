@@ -28,10 +28,6 @@ supp_df = supp_df.drop(supp_df.index[0]) #remove the first row from the data
 # ==================
 
 
-
-
-
-
 # %% 1. Selection from R-Link datasets
 # ====================================
 
@@ -47,11 +43,6 @@ inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv
 # Baseline
 baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
 
-# Use inclusion_df & baseline_df to replicate selection from:
-# /neurospin/signatures/temp_thibault/2024_rlink_predict_response/Clinical/RLINK-1-Clinical.ipynb
-
-# %% 2. merge with supplementary data supp_df
-# ===========================================
 
 
 
@@ -163,7 +154,56 @@ assert baseline_df.shape == (168, 164)
 
 
 
-#merge without data supp_df
+
+## All other relevant variables from base dataframe
+
+# 1.4 Variables from file "dataset-clinical_version-2_outcome.tsv"
+
+vars = ["participant_id", "Response.Status.at.end.of.follow.up"]
+outcome = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t', na_values=['ND'])
+final_response = outcome[vars]
+#df4.participant_id = ["sub-"+ str(id) for id in df4.participant_id]
+assert final_response.shape == (168, 2)
+
+
+###Response variables 
+
+RESPONSEDIR = "/neurospin/rlink/workspace/code"
+#final_response = pd.read_csv(os.path.join(RESPONSEDIR, "dataset-clinical_version-2_outcome.csv"), sep = ';')
+print('Shape of the dataset: ', final_response.shape)
+display(final_response["Response.Status.at.end.of.follow.up"].value_counts())
+display(final_response['Status.ITT'].value_counts())
+display(final_response['Status.per.protocol'].value_counts())
+print("What the UCs in ITT have become after reclassification")
+display(final_response.loc[final_response['Status.ITT'] == 'UC', 'Response.Status.at.end.of.follow.up'].value_counts())
+
+response = final_response.rename(columns = {
+    "SUBJECT_REF": "participant_id",
+    "Response.Status.at.end.of.follow.up": "response"
+})
+
+response.loc[response["response"] == "UC", "response"] = np.NaN
+
+## response_2 is a binary variable with GR and others (PR, NR, UC pooled)
+response["response_2"] = np.nan
+response.loc[((response["response"] == "PaR") | (response["response"] == "NR") | (response["response"] == "UC") ), "response_2"] = "No_GR"
+response.loc[((response["response"] == "GR")), "response_2"] = "GR"
+
+response["response_3"] = np.nan
+response.loc[((response["response"] == "PaR") | (response["response"] == "GR") | (response["response"] == "UC") ), "response_3"] = "Others"
+response.loc[((response["response"] == "NR")), "response_3"] = "NR"
+# Plotting response_2 variable 
+
+sns.countplot(x = "response", data = response)
+plt.ylabel("Absolute counts")
+plt.xlabel('Status')
+plt.title("Response status at end of follow up (Binary variable)")
+plt.show()
+
+
+# %% 2. Merge tables using "participant_id" (used by default)
+# ===========================================
+
 
 Base = baseline_df.merge(
     inclusion_df,
@@ -177,44 +217,14 @@ Base["id"] = baseline_df["participant_id"].str.split("-", expand = True).iloc[:,
 
 
 
-## All other relevant variables from base dataframe
-
-
-# # 1.3 Variables from file "dataset-clinical_mod-visits_form-visit_version-2.tsv
-# vars = ["participant_id", "FORM_F_VISIT",
-#         "WHOA2A", "PLIMRI", "ERYLIMRI", "PLI", "ERYLI", "PLI2",
-#         "MARS1V", "MARS2V", "MARS3V", "MARS4V", "MARS5V", "MARS6V", "MARS7V", "MARS8V",
-#         "MARS9V", "MARS10V"]
-# m3_df = pd.read_csv(INPUT + "dataset-clinical_mod-visits_form-visit_version-3.tsv", sep='\t', na_values=['ND'])
-# m3_df = m3_df[vars]
-# m3_df.shape == (2449, 18)
-# # Select visits at month 3 => FORM_F_VISIT == 'F_VISIT_1'
-# m3_df = m3_df[m3_df.FORM_F_VISIT == 'F_VISIT_1']
-# # drop FORM_F_VISIT column and suffix variable with "_M03"
-# m3_df = m3_df.drop(['FORM_F_VISIT'], axis=1)
-# m3_df = m3_df.rename(columns={"MARS1V":"MARS1_M03", "MARS2V":"MARS2_M03", "MARS3V":"MARS3_M03",
-#             "MARS4V":"MARS4_M03", "MARS5V":"MARS5_M03", "MARS6V":"MARS6_M03",
-#             "MARS7V":"MARS7_M03", "MARS8V":"MARS8_M03", "MARS9V":"MARS9_M03",
-#             "MARS10V":"MARS10_M03"})
-# assert m3_df.shape == (141, 17)
-
-# 1.4 Variables from file "dataset-clinical_version-2_outcome.tsv"
-
-vars = ["participant_id", "Response.Status.at.end.of.follow.up"]
-outcome = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t', na_values=['ND'])
-outcome = outcome[vars]
-#df4.participant_id = ["sub-"+ str(id) for id in df4.participant_id]
-assert outcome.shape == (168, 2)
-
-
-# %% 2. Merge tables using "participant_id" (used by default)
-
-
 table = pd.merge(pd.merge(inclusion_df, baseline_df), outcome)
 table.shape == (141, 36)
 
+
+# %% 2. merge with supplementary data supp_df
+# ===========================================
 # %% 3. Save to excel file
 #
-
-table.to_excel(OUTPUT + "data_demoSmokLiMarsResponse_python.xlsx", index=False)
-table.to_csv(OUTPUT + "rlink-predict-response-clinic_v-20260416", index=False)
+#table.to_excel(OUTPUT + "data_demoSmokLiMarsResponse_python.xlsx", index=False)
+table.to_excel(OUTPUT + "Clinical_data.xlsx", index=False)
+table.to_csv(OUTPUT + "rlink-predict-response-clinic_v-20260430", index=False)
