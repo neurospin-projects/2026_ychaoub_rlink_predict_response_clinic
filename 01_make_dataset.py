@@ -1,5 +1,8 @@
 # Read files
 import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 import os
 
 
@@ -160,10 +163,10 @@ assert baseline_df.shape == (168, 164)
 # 1.4 Variables from file "dataset-clinical_version-2_outcome.tsv"
 
 vars = ["participant_id", "Response.Status.at.end.of.follow.up"]
-outcome = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t', na_values=['ND'])
-final_response = outcome[vars]
+final_response = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t', na_values=['ND'])
+#final_response= outcome[vars]
 #df4.participant_id = ["sub-"+ str(id) for id in df4.participant_id]
-assert final_response.shape == (168, 2)
+#assert final_response.shape == (168, 2)
 
 
 ###Response variables 
@@ -171,11 +174,12 @@ assert final_response.shape == (168, 2)
 RESPONSEDIR = "/neurospin/rlink/workspace/code"
 #final_response = pd.read_csv(os.path.join(RESPONSEDIR, "dataset-clinical_version-2_outcome.csv"), sep = ';')
 print('Shape of the dataset: ', final_response.shape)
-display(final_response["Response.Status.at.end.of.follow.up"].value_counts())
-display(final_response['Status.ITT'].value_counts())
-display(final_response['Status.per.protocol'].value_counts())
+final_response["Response.Status.at.end.of.follow.up"].value_counts()
+final_response['Status.ITT'].value_counts()
+final_response['Status.per.protocol'].value_counts()
+
 print("What the UCs in ITT have become after reclassification")
-display(final_response.loc[final_response['Status.ITT'] == 'UC', 'Response.Status.at.end.of.follow.up'].value_counts())
+final_response.loc[final_response['Status.ITT'] == 'UC', 'Response.Status.at.end.of.follow.up'].value_counts()
 
 response = final_response.rename(columns = {
     "SUBJECT_REF": "participant_id",
@@ -189,12 +193,13 @@ response["response_2"] = np.nan
 response.loc[((response["response"] == "PaR") | (response["response"] == "NR") | (response["response"] == "UC") ), "response_2"] = "No_GR"
 response.loc[((response["response"] == "GR")), "response_2"] = "GR"
 
-response["response_3"] = np.nan
-response.loc[((response["response"] == "PaR") | (response["response"] == "GR") | (response["response"] == "UC") ), "response_3"] = "Others"
-response.loc[((response["response"] == "NR")), "response_3"] = "NR"
+#response["response_3"] = np.nan
+#response.loc[((response["response"] == "PaR") | (response["response"] == "GR") | (response["response"] == "UC") ), "response_3"] = "Others"
+#response.loc[((response["response"] == "NR")), "response_3"] = "NR"
+
 # Plotting response_2 variable 
 
-sns.countplot(x = "response", data = response)
+sns.countplot(x = "response_2", data = response)
 plt.ylabel("Absolute counts")
 plt.xlabel('Status')
 plt.title("Response status at end of follow up (Binary variable)")
@@ -212,19 +217,140 @@ Base = baseline_df.merge(
     how = "left"
 )
 
-Base["id"] = baseline_df["participant_id"].str.split("-", expand = True).iloc[:, 1].astype(int)
+## Merging response variable and base
+f_data = Base.merge(
+    response[["participant_id", "response_2"]], 
+    left_on = "participant_id",
+    right_on = "participant_id",
+    how = "left"
+)
+
+
+#Base["id"] = baseline_df["participant_id"].str.split("-", expand = True).iloc[:, 1].astype(int)
 
 
 
 
-table = pd.merge(pd.merge(inclusion_df, baseline_df), outcome)
-table.shape == (141, 36)
+final_data = pd.merge(inclusion_df, f_data)
+#table.shape == (141, 36)
 
 
+
+
+
+#final_data = final_data.rename({ "participant_id_x":"participant_id"})
+
+#final_data.drop(["participant_id_y", "id"], axis = 1, inplace =True)
+
+
+final_data['BMQ_NECESSITY'] = final_data['BMQ1_PRELI'] + final_data['BMQ2_PRELI'] +final_data['BMQ3_PRELI']+final_data['BMQ4_PRELI']+final_data['BMQ5_PRELI']
+final_data['BMQ_PREOCCUPATION'] = final_data['BMQ6_PRELI'] + final_data['BMQ7_PRELI'] +final_data['BMQ8_PRELI']+final_data['BMQ9_PRELI']+final_data['BMQ10_PRELI']
+final_data['BMQ_DIFFERENTIAL'] = final_data['BMQ_NECESSITY'] - final_data['BMQ_PREOCCUPATION']
+final_data['BMQ_GENERAL'] = final_data['BMQ11_PRELI'] +final_data['BMQ12_PRELI']+final_data['BMQ13_PRELI']+final_data['BMQ14_PRELI']+final_data['BMQ15_PRELI']+final_data['BMQ16_PRELI']+final_data['BMQ17_PRELI']+final_data['BMQ18_PRELI']
+
+### ADDING NEW VARIABLES ###
+final_data['MARS_TOTAL'] = np.sum(final_data[final_data.columns[final_data.columns.str.startswith('MARS')]], axis = 1)
+
+#final_data['TRQ_TOTAL'] = np.nan
+
+#Data cleaning
+final_data["FHIST_PLI"].replace(9.0, 0.0, inplace = True)
+
+fhist_ratio_h = fhist.groupby('participant_id')['SEX_FH'].apply(lambda x: (x == 1.0).mean())
+fhist_ratio_h.name = "fhist_ratio_h"
+fhist_repli = fhist.groupby('participant_id')['REPLI_FM'].apply(lambda x: (x == 1.0).mean())
+fhist_repli.name = "fhist_repli"
+fhist_repli.value_counts()
+#fhist_diag_fh = fhist.groupby('participant_id')['DIAG_FH'].apply(lambda x: (x.isin([])))
+
+### Counting relatives 
+fhist_count = fhist.groupby("participant_id").size().sort_values()
+fhist_count.name = "fhist_count"
+
+final_data = final_data.merge(
+    fhist_count, 
+    left_on = "participant_id",
+    right_on = "participant_id",
+    how = "left"
+)
+
+final_data = final_data.merge(
+    fhist_ratio_h, 
+    left_on = "participant_id",
+    right_on = "participant_id",
+    how = "left"
+)
+
+final_data = final_data.merge(
+    fhist_repli, 
+    left_on = "participant_id",
+    right_on = "participant_id",
+    how = "left"
+)
+
+final_data['fhist_count'].fillna(0, inplace = True)
+final_data['fhist_ratio_h'].fillna(0, inplace = True)
+final_data['fhist_repli'].fillna(0, inplace = True)
+
+final_data.shape
 # %% 2. merge with supplementary data supp_df
 # ===========================================
+
+
+### Missing values assessment 
+final_data.apply(lambda x: (x.isna().mean())*100, axis = 0)
+
+## Removing response variables with absent values (for now) n = 30 responses 
+print("Missing values : ", final_data["response_2"].isna().sum())
+final_data_no_na = final_data.dropna(subset = ['response_2'], how = "any")
+
+## Selecting an arbitrary threshold of missing values
+
+threshold = 0.4
+final_data_no_na.columns[final_data_no_na.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
+
+total = len(final_data_no_na.columns)
+
+## plot of number of features remaining depending on the chosen thresold 
+values_thresholds = np.arange(0.0, 1.0, 0.01)
+
+dict_values = {key:0 for key in values_thresholds}
+
+for key in dict_values.keys():
+    n = len(final_data_no_na.columns[final_data_no_na.apply(lambda x: x.isna().mean(), axis = 0) > key])
+    dict_values[key] = total - n
+
+
+df = pd.DataFrame.from_dict(dict_values, orient = "index", dtype = float)
+
+df.reset_index(inplace = True)
+df['new_index'] = 1 - df['index']
+df.set_index("new_index", inplace = True)
+df.drop("index", axis =1, inplace = True )
+
+sns.lineplot(df)
+plt.ylabel("Features remaining")
+plt.xlabel('Ratio of NAs (threshold)')
+plt.legend('')
+plt.grid()
+
+#Choosing a threshold for missing values 
+threshold = 0.4
+cols_to_drop = final_data_no_na.columns[final_data_no_na.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
+df_final = final_data_no_na.drop(cols_to_drop, axis = 1)
+df_final.info()
+
+
+
+
 # %% 3. Save to excel file
 #
 #table.to_excel(OUTPUT + "data_demoSmokLiMarsResponse_python.xlsx", index=False)
-table.to_excel(OUTPUT + "Clinical_data.xlsx", index=False)
-table.to_csv(OUTPUT + "rlink-predict-response-clinic_v-20260430", index=False)
+#table.to_excel(OUTPUT + "Clinical_data.xlsx", index=False)
+#table.to_csv(OUTPUT + "rlink-predict-response-clinic_v-20260430", index=False)
+
+df_ = df_final.select_dtypes(exclude = "datetime")
+df_.drop(["DATBIO_PRELI"], axis = 1, inplace = True)
+#cols_to_select = df_.columns[~(df_.columns.str.startswith('BMQ') | df_.columns.str.startswith('MARS') | df_.columns.str.startswith('TRQ'))]
+#df_ = df_[cols_to_select]
+df_.to_csv(OUTPUT + 'CLINICAL_DATA.csv')
