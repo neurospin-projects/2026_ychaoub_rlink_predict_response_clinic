@@ -171,6 +171,10 @@ final_response = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t', 
 
 ###Response variables 
 
+
+
+
+
 RESPONSEDIR = "/neurospin/rlink/workspace/code"
 #final_response = pd.read_csv(os.path.join(RESPONSEDIR, "dataset-clinical_version-2_outcome.csv"), sep = ';')
 print('Shape of the dataset: ', final_response.shape)
@@ -186,16 +190,28 @@ response = final_response.rename(columns = {
     "Response.Status.at.end.of.follow.up": "response"
 })
 
+
+
+
+
+# Plotting response variable 
+
+sns.countplot(x = "response", data = response)
+plt.ylabel("Absolute counts")
+plt.xlabel('Status')
+plt.title("Response status at end of follow up")
+plt.show()
+
+
+
+
+
 response.loc[response["response"] == "UC", "response"] = np.NaN
 
 ## response_2 is a binary variable with GR and others (PR, NR, UC pooled)
 response["response_2"] = np.nan
 response.loc[((response["response"] == "PaR") | (response["response"] == "NR") | (response["response"] == "UC") ), "response_2"] = "No_GR"
 response.loc[((response["response"] == "GR")), "response_2"] = "GR"
-
-#response["response_3"] = np.nan
-#response.loc[((response["response"] == "PaR") | (response["response"] == "GR") | (response["response"] == "UC") ), "response_3"] = "Others"
-#response.loc[((response["response"] == "NR")), "response_3"] = "NR"
 
 # Plotting response_2 variable 
 
@@ -354,3 +370,4 @@ df_.drop(["DATBIO_PRELI"], axis = 1, inplace = True)
 #cols_to_select = df_.columns[~(df_.columns.str.startswith('BMQ') | df_.columns.str.startswith('MARS') | df_.columns.str.startswith('TRQ'))]
 #df_ = df_[cols_to_select]
 df_.to_csv(OUTPUT + 'CLINICAL_DATA.csv')
+df_
