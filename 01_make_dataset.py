@@ -152,7 +152,7 @@ VARS_TO_INCLUDE_QUESTIONNAIRES = [
 
 baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
 baseline_df = baseline_df[VARS_TO_INCLUDE_PRELI + VARS_TO_INCLUDE_QUESTIONNAIRES ]
-assert baseline_df.shape == (168, 164)
+assert baseline_df.shape == (168, 163)
 
 
 
@@ -189,19 +189,29 @@ print("number of UnClassified (UC) :",len(final_response[final_response[label]==
 
 # we ignore the unclassified subjects, and keep only the good responders, partial responders, and non-responders
 labels_to_keep= ["GR","PaR","NR"]
-final_to_keep = final_response[final_response[label].isin(labels_to_keep)]
-final_to_keep = final_to_keep[["participant_id",label]]
+Response = final_response[final_response[label].isin(labels_to_keep)]
+Response = Response[["participant_id",label]]
 # keep the variable 'Response.Status.at.end.of.follow.up' as y (label / outcome) for classification
-final_to_keep = final_to_keep.rename(columns={label: "response"})
-assert set(final_to_keep['response'].unique()) == set(["NR","PaR","GR"])
+Response = Response.rename(columns={label: "response"})
+Response.loc[((Response["response"] == "PaR") | (Response["response"] == "NR") | (Response["response"] == "UC") ), "response"] = "No_GR"
+
+assert set(Response['response'].unique()) == set(["No_GR","GR"])
 
 # Plotting response variable 
 
-sns.countplot(x = "response", data = final_to_keep)
+sns.countplot(x = "Response.Status.at.end.of.follow.up", data = final_response)
 plt.ylabel("Absolute counts")
 plt.xlabel('Status')
 plt.title("Response status at end of follow up")
 plt.show()
+# Plotting response variable 
+
+sns.countplot(x = "response", data = Response)
+plt.ylabel("Absolute counts")
+plt.xlabel('Status')
+plt.title("Response status at end of follow up")
+plt.show()
+
 
 # %% 2. Merge tables using "participant_id" (used by default)
 # ===========================================
@@ -211,7 +221,7 @@ final_data = pd.merge(inclusion_df,
                       on='participant_id', 
                       how='inner'
 )
-assert baseline_df.shape == (168, 164)
+assert final_data.shape == (168, 166)
 
 
 
@@ -254,7 +264,7 @@ final_data = final_data.merge(
     on='participant_id', 
     how = "left"
 )
-assert baseline_df.shape == (168, 164)
+assert final_data.shape == (168, 174)
 
 
 
@@ -282,40 +292,80 @@ Variables_supp=['participant_id', 'AGE', 'SEX',
        'BRMS_W1_M03', 'DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP',
        'DeltaBZD']
 Variables_to_drop = ['AGE', 'SEX', #variables_in_inclusion
-                     'DeltaBMI','Delta_BMI_impute','DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP','DeltaBZD' #M03_in_Delta
-                     'QIDS_W1_M03','BRMS_W1_M03', #M03
+                     'DeltaBMI','Delta_BMI_impute','DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP','DeltaBZD', #M03_in_Delta
+                     'QIDS_W1_M03','BMI_M03','BRMS_W1_M03', #M03
                      ]
-Variables_might_be_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique',
-                                  'QIDS_TotalScore_M00','QIDS_W1_M03',
-                                  'BRMS_TotalScore_M00']
+Variables_supp_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique','QIDS_TotalScore_M00','BRMS_TotalScore_M00']
 
-Variables_idk = ['DISRDR-Trouble_n°1',
-                 'DISRDR-Trouble_n°2etplus']
+#Variables CTGY-CategorieComorbiditeSomatique_n°1','CTGY-CategorieComorbiditeSomatique_n°2etplus','DISEASE-PathologieComorbiditeSomatique_n°1','DISEASE-PathologieComorbiditeSomatique_n°2etplus','PSYHLTH_PLI-ComorbiditePsychiatrique', 'DISRDR-Trouble_n°1','DISRDR-Trouble_n°2etplus'
+Variables_to_keep = [item for item in Variables_supp if item not in Variables_to_drop]
+final_data = final_data.merge(
+    supp_df[Variables_to_keep], 
+    on='participant_id', 
+    how = "inner"
+)
+assert final_data.shape == (168, 193)
+
+
+#Variables Somatic comorbidity ###########################################################################
+
+supp_df['CTGY-CategorieComorbiditeSomatique_n°1'].unique()
+supp_df['CTGY-CategorieComorbiditeSomatique_n°2etplus'].unique()
+
+#Variables Psychiatric comorbidity
+supp_df['DISEASE-PathologieComorbiditeSomatique_n°1'].unique()
+supp_df['DISEASE-PathologieComorbiditeSomatique_n°2etplus'].unique()
+
+
+supp_df['DISRDR-Trouble_n°1'].unique()
+supp_df['DISRDR-Trouble_n°2etplus'].unique()
+
+
+###Coreelation (Variables_supp_in_final_data and variables of final_data)###
+
+df_corr=final_data
+for column in Variables_supp_in_final_data :
+    df_corr[column]=pd.to_numeric(df_corr[column],errors='coerce')
+
+cols_num= df_corr.select_dtypes(include=['number']).columns
+
+corr_matrix = df_corr[cols_num].corr()
+cols_num=cols_num.drop('PHCMBY_PLI-ComorbiditeSomatique')
+cols_num=cols_num.drop('QIDS_TotalScore_M00')
+cols_num=cols_num.drop('BRMS_TotalScore_M00')
+
+result = corr_matrix.loc[Variables_supp_in_final_data,cols_num]
+constent=0.9
+filtered_result=result[result.abs()>constent]
+high_corr_pairs= filtered_result.stack().reset_index()
+high_corr_pairs
+
+#So the variables in Variables_supp_in_final_data already in final_data:
+    #PHCMBY_PLI-ComorbiditeSomatique = PHCMBY_PLI
+    #QIDS_TotalScore_M00 = QIDSTSC_PRELI
+    #BRMS_TotalScore_M00 = BRMSTSC_PRELI
+final_data = final_data.drop(columns=Variables_supp_in_final_data)
 
 ## Merging response variable and base
 
-f_data = pd.merge(
+final_data = pd.merge(
     final_data, 
-    final_to_keep[["participant_id", "response"]], 
+    Response[["participant_id", "response"]], 
     on='participant_id', 
     how='inner'
 )
-assert baseline_df.shape == (168, 164)
+assert final_data.shape == (138, 191)  #30 individuals have no value for the response variable.
 
 
-### Missing values assessment 
+### Filter columns based on missing valeu percentage
 final_data.apply(lambda x: (x.isna().mean())*100, axis = 0)
-
-## Removing response variables with absent values (for now) n = 30 responses 
-print("Missing values : ", final_data["response_2"].isna().sum())
-final_data_no_na = final_data.dropna(subset = ['response_2'], how = "any")
 
 ## Selecting an arbitrary threshold of missing values
 
 threshold = 0.4
-final_data_no_na.columns[final_data_no_na.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
+final_data.columns[final_data.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
 
-total = len(final_data_no_na.columns)
+total = len(final_data.columns)
 
 ## plot of number of features remaining depending on the chosen thresold 
 values_thresholds = np.arange(0.0, 1.0, 0.01)
@@ -323,7 +373,7 @@ values_thresholds = np.arange(0.0, 1.0, 0.01)
 dict_values = {key:0 for key in values_thresholds}
 
 for key in dict_values.keys():
-    n = len(final_data_no_na.columns[final_data_no_na.apply(lambda x: x.isna().mean(), axis = 0) > key])
+    n = len(final_data.columns[final_data.apply(lambda x: x.isna().mean(), axis = 0) > key])
     dict_values[key] = total - n
 
 
@@ -335,10 +385,6 @@ df.set_index("new_index", inplace = True)
 df.drop("index", axis =1, inplace = True )
 
 
-assert baseline_df.shape == (168, 164)
-
-
-
 sns.lineplot(df)
 plt.ylabel("Features remaining")
 plt.xlabel('Ratio of NAs (threshold)')
@@ -347,10 +393,13 @@ plt.grid()
 
 #Choosing a threshold for missing values 
 threshold = 0.4
-cols_to_drop = final_data_no_na.columns[final_data_no_na.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
-df_final = final_data_no_na.drop(cols_to_drop, axis = 1)
+cols_to_drop = final_data.columns[final_data.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
+df_final = final_data.drop(cols_to_drop, axis = 1)
 df_final.info()
 
+assert final_data.shape == (138, 155) 
+
+###
 
 
 
