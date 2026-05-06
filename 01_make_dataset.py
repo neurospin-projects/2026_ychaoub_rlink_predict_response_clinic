@@ -152,7 +152,6 @@ VARS_TO_INCLUDE_QUESTIONNAIRES = [
 
 baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
 baseline_df = baseline_df[VARS_TO_INCLUDE_PRELI + VARS_TO_INCLUDE_QUESTIONNAIRES ]
-baseline_df["BMI"] = baseline_df["WEIGHT_PRELI"] / (baseline_df["HEIGHT_PRELI"] ** 2) * (100 ** 2)
 assert baseline_df.shape == (168, 164)
 
 
@@ -163,111 +162,67 @@ assert baseline_df.shape == (168, 164)
 # 1.4 Variables from file "dataset-clinical_version-2_outcome.tsv"
 
 vars = ["participant_id", "Response.Status.at.end.of.follow.up"]
-final_response = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t', na_values=['ND'])
+final_response = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t')
 #final_response= outcome[vars]
 #df4.participant_id = ["sub-"+ str(id) for id in df4.participant_id]
 #assert final_response.shape == (168, 2)
 
 
-###Response variables 
-
-
-
-
-
-RESPONSEDIR = "/neurospin/rlink/workspace/code"
-#final_response = pd.read_csv(os.path.join(RESPONSEDIR, "dataset-clinical_version-2_outcome.csv"), sep = ';')
-print('Shape of the dataset: ', final_response.shape)
-final_response["Response.Status.at.end.of.follow.up"].value_counts()
-final_response['Status.ITT'].value_counts()
-final_response['Status.per.protocol'].value_counts()
-
-print("What the UCs in ITT have become after reclassification")
-final_response.loc[final_response['Status.ITT'] == 'UC', 'Response.Status.at.end.of.follow.up'].value_counts()
-
-response = final_response.rename(columns = {
-    "SUBJECT_REF": "participant_id",
-    "Response.Status.at.end.of.follow.up": "response"
-})
-
-
-
-
-
 # Plotting response variable 
 
-sns.countplot(x = "response", data = response)
+sns.countplot(x = "Response.Status.at.end.of.follow.up", data = final_response)
 plt.ylabel("Absolute counts")
 plt.xlabel('Status')
 plt.title("Response status at end of follow up")
 plt.show()
 
+###Response variables 
+# column of population dataframe that defines response to Li label
+label = 'Response.Status.at.end.of.follow.up'
 
+print(final_response[label].unique())
 
+print("in population dataframe: \nnumber of Good Responders (GR) :",len(final_response[final_response[label]=="GR"].values))
+print("number of Partial Responders (PaR) :",len(final_response[final_response[label]=="PaR"].values))
+print("number of Non Responders (NR) :",len(final_response[final_response[label]=="NR"].values))
+print("number of UnClassified (UC) :",len(final_response[final_response[label]=="UC"].values))
 
+# we ignore the unclassified subjects, and keep only the good responders, partial responders, and non-responders
+labels_to_keep= ["GR","PaR","NR"]
+final_to_keep = final_response[final_response[label].isin(labels_to_keep)]
+final_to_keep = final_to_keep[["participant_id",label]]
+# keep the variable 'Response.Status.at.end.of.follow.up' as y (label / outcome) for classification
+final_to_keep = final_to_keep.rename(columns={label: "response"})
+assert set(final_to_keep['response'].unique()) == set(["NR","PaR","GR"])
 
-response.loc[response["response"] == "UC", "response"] = np.NaN
+# Plotting response variable 
 
-## response_2 is a binary variable with GR and others (PR, NR, UC pooled)
-response["response_2"] = np.nan
-response.loc[((response["response"] == "PaR") | (response["response"] == "NR") | (response["response"] == "UC") ), "response_2"] = "No_GR"
-response.loc[((response["response"] == "GR")), "response_2"] = "GR"
-
-# Plotting response_2 variable 
-
-sns.countplot(x = "response_2", data = response)
+sns.countplot(x = "response", data = final_to_keep)
 plt.ylabel("Absolute counts")
 plt.xlabel('Status')
-plt.title("Response status at end of follow up (Binary variable)")
+plt.title("Response status at end of follow up")
 plt.show()
-
 
 # %% 2. Merge tables using "participant_id" (used by default)
 # ===========================================
 
-
-Base = baseline_df.merge(
-    inclusion_df,
-    left_on = "participant_id",
-    right_on = "participant_id",
-    how = "left"
+final_data = pd.merge(inclusion_df, 
+                      baseline_df,
+                      on='participant_id', 
+                      how='inner'
 )
-
-## Merging response variable and base
-f_data = Base.merge(
-    response[["participant_id", "response_2"]], 
-    left_on = "participant_id",
-    right_on = "participant_id",
-    how = "left"
-)
-
-
-#Base["id"] = baseline_df["participant_id"].str.split("-", expand = True).iloc[:, 1].astype(int)
+assert baseline_df.shape == (168, 164)
 
 
 
-
-final_data = pd.merge(inclusion_df, f_data)
-#table.shape == (141, 36)
-
-
-
-
-
-#final_data = final_data.rename({ "participant_id_x":"participant_id"})
-
-#final_data.drop(["participant_id_y", "id"], axis = 1, inplace =True)
-
-
+### ADDING NEW VARIABLES ###
 final_data['BMQ_NECESSITY'] = final_data['BMQ1_PRELI'] + final_data['BMQ2_PRELI'] +final_data['BMQ3_PRELI']+final_data['BMQ4_PRELI']+final_data['BMQ5_PRELI']
 final_data['BMQ_PREOCCUPATION'] = final_data['BMQ6_PRELI'] + final_data['BMQ7_PRELI'] +final_data['BMQ8_PRELI']+final_data['BMQ9_PRELI']+final_data['BMQ10_PRELI']
 final_data['BMQ_DIFFERENTIAL'] = final_data['BMQ_NECESSITY'] - final_data['BMQ_PREOCCUPATION']
 final_data['BMQ_GENERAL'] = final_data['BMQ11_PRELI'] +final_data['BMQ12_PRELI']+final_data['BMQ13_PRELI']+final_data['BMQ14_PRELI']+final_data['BMQ15_PRELI']+final_data['BMQ16_PRELI']+final_data['BMQ17_PRELI']+final_data['BMQ18_PRELI']
 
-### ADDING NEW VARIABLES ###
 final_data['MARS_TOTAL'] = np.sum(final_data[final_data.columns[final_data.columns.str.startswith('MARS')]], axis = 1)
 
-#final_data['TRQ_TOTAL'] = np.nan
 
 #Data cleaning
 final_data["FHIST_PLI"].replace(9.0, 0.0, inplace = True)
@@ -277,7 +232,6 @@ fhist_ratio_h.name = "fhist_ratio_h"
 fhist_repli = fhist.groupby('participant_id')['REPLI_FM'].apply(lambda x: (x == 1.0).mean())
 fhist_repli.name = "fhist_repli"
 fhist_repli.value_counts()
-#fhist_diag_fh = fhist.groupby('participant_id')['DIAG_FH'].apply(lambda x: (x.isin([])))
 
 ### Counting relatives 
 fhist_count = fhist.groupby("participant_id").size().sort_values()
@@ -285,32 +239,68 @@ fhist_count.name = "fhist_count"
 
 final_data = final_data.merge(
     fhist_count, 
-    left_on = "participant_id",
-    right_on = "participant_id",
+    on='participant_id', 
     how = "left"
 )
 
 final_data = final_data.merge(
     fhist_ratio_h, 
-    left_on = "participant_id",
-    right_on = "participant_id",
+    on='participant_id', 
     how = "left"
 )
 
 final_data = final_data.merge(
     fhist_repli, 
-    left_on = "participant_id",
-    right_on = "participant_id",
+    on='participant_id', 
     how = "left"
 )
+assert baseline_df.shape == (168, 164)
+
+
 
 final_data['fhist_count'].fillna(0, inplace = True)
 final_data['fhist_ratio_h'].fillna(0, inplace = True)
 final_data['fhist_repli'].fillna(0, inplace = True)
 
 final_data.shape
+
+
 # %% 2. merge with supplementary data supp_df
 # ===========================================
+Variables_supp=['participant_id', 'AGE', 'SEX', 
+                'BMI_M00', 'BMI_M03', 'DeltaBMI',
+       'Delta_BMI_impute', 'PHCMBY_PLI-ComorbiditeSomatique',
+       'CTGY-CategorieComorbiditeSomatique_n°1',
+       'CTGY-CategorieComorbiditeSomatique_n°2etplus',
+       'DISEASE-PathologieComorbiditeSomatique_n°1',
+       'DISEASE-PathologieComorbiditeSomatique_n°2etplus',
+       'PSYHLTH_PLI-ComorbiditePsychiatrique', 'DISRDR-Trouble_n°1',
+       'DISRDR-Trouble_n°2etplus', 'AgeAtOnset', 'NumberPreviousEpisodes',
+       'DurationIllness', 'DensityEpisodes', 'NbHospitalizationsLifetime',
+       'DensityHospit', 'SmokingStatus-WHOA1A_PLI', 'SuicideAttempts(Yes/No)',
+       'QIDS_TotalScore_M00', 'QIDS_W1_M03', 'BRMS_TotalScore_M00',
+       'BRMS_W1_M03', 'DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP',
+       'DeltaBZD']
+Variables_to_drop = ['AGE', 'SEX', #variables_in_inclusion
+                     'DeltaBMI','Delta_BMI_impute','DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP','DeltaBZD' #M03_in_Delta
+                     'QIDS_W1_M03','BRMS_W1_M03', #M03
+                     ]
+Variables_might_be_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique',
+                                  'QIDS_TotalScore_M00','QIDS_W1_M03',
+                                  'BRMS_TotalScore_M00']
+
+Variables_idk = ['DISRDR-Trouble_n°1',
+                 'DISRDR-Trouble_n°2etplus']
+
+## Merging response variable and base
+
+f_data = pd.merge(
+    final_data, 
+    final_to_keep[["participant_id", "response"]], 
+    on='participant_id', 
+    how='inner'
+)
+assert baseline_df.shape == (168, 164)
 
 
 ### Missing values assessment 
@@ -343,6 +333,11 @@ df.reset_index(inplace = True)
 df['new_index'] = 1 - df['index']
 df.set_index("new_index", inplace = True)
 df.drop("index", axis =1, inplace = True )
+
+
+assert baseline_df.shape == (168, 164)
+
+
 
 sns.lineplot(df)
 plt.ylabel("Features remaining")
