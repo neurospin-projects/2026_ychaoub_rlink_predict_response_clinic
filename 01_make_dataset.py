@@ -4,7 +4,8 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import os
-
+import missingno as msno
+from sklearn.preprocessing import LabelEncoder
 
 # %% Set path to inout data and output results according to your local configuration
 
@@ -91,8 +92,7 @@ VARS_TO_INCLUDE_PRELI = [
     "EVNT_PRELI",
     # Medication history
     "CURRMED_PRELI",
-    # Biological 
-    "DATBIO_PRELI",
+    # Biological
     "NA_PRELI",
     "K_PRELI",
     "CL_PRELI",
@@ -196,7 +196,8 @@ Response = Response.rename(columns={label: "response"})
 Response.loc[((Response["response"] == "PaR") | (Response["response"] == "NR") | (Response["response"] == "UC") ), "response"] = "No_GR"
 
 assert set(Response['response'].unique()) == set(["No_GR","GR"])
-
+le = LabelEncoder()
+Response['response']=le.fit_transform(Response['response']) # 0 -> GR , 1-> No_GR
 # Plotting response variable 
 
 sns.countplot(x = "Response.Status.at.end.of.follow.up", data = final_response)
@@ -307,18 +308,20 @@ final_data = final_data.merge(
 assert final_data.shape == (168, 193)
 
 
-#Variables Somatic comorbidity ###########################################################################
+#Variables Somatic comorbidity and Psychiatric comorbidity ###########################################################################
 
 supp_df['CTGY-CategorieComorbiditeSomatique_n°1'].unique()
 supp_df['CTGY-CategorieComorbiditeSomatique_n°2etplus'].unique()
 
-#Variables Psychiatric comorbidity
+
 supp_df['DISEASE-PathologieComorbiditeSomatique_n°1'].unique()
 supp_df['DISEASE-PathologieComorbiditeSomatique_n°2etplus'].unique()
 
 
 supp_df['DISRDR-Trouble_n°1'].unique()
 supp_df['DISRDR-Trouble_n°2etplus'].unique()
+
+
 
 
 ###Coreelation (Variables_supp_in_final_data and variables of final_data)###
@@ -340,10 +343,10 @@ filtered_result=result[result.abs()>constent]
 high_corr_pairs= filtered_result.stack().reset_index()
 high_corr_pairs
 
-#So the variables in Variables_supp_in_final_data already in final_data:
-    #PHCMBY_PLI-ComorbiditeSomatique = PHCMBY_PLI
-    #QIDS_TotalScore_M00 = QIDSTSC_PRELI
-    #BRMS_TotalScore_M00 = BRMSTSC_PRELI
+# So the variables in Variables_supp_in_final_data already in final_data:
+# PHCMBY_PLI-ComorbiditeSomatique = PHCMBY_PLI
+# QIDS_TotalScore_M00 = QIDSTSC_PRELI
+# BRMS_TotalScore_M00 = BRMSTSC_PRELI
 final_data = final_data.drop(columns=Variables_supp_in_final_data)
 
 ## Merging response variable and base
@@ -355,6 +358,9 @@ final_data = pd.merge(
     how='inner'
 )
 assert final_data.shape == (138, 191)  #30 individuals have no value for the response variable.
+
+final_data= final_data.replace('ND',np.nan) #Replace 'ND' values with NaN as they represent missing data
+
 
 
 ### Filter columns based on missing valeu percentage
@@ -397,21 +403,95 @@ cols_to_drop = final_data.columns[final_data.apply(lambda x: x.isna().mean(), ax
 df_final = final_data.drop(cols_to_drop, axis = 1)
 df_final.info()
 
-assert final_data.shape == (138, 155) 
-
-###
+assert df_final.shape == (138, 155) 
 
 
+###Missing_per row
 
+missing_rate = df_final.isnull().mean(axis=1)
+max_missin = missing_rate.max()
+
+# Plot the distribution of missing rates per row
+plt.figure(figsize=(10, 6))
+plt.hist(missing_rate, bins=30, color='skyblue', edgecolor='black')
+plt.title('Distribution of Missing Values per Row')
+plt.xlabel('Missing Rate (Percentage)')
+plt.ylabel('Number of Rows')
+plt.legend()
+plt.show()
+
+# the maximum is 48.34% -> Keep all observations
+
+###Handling missing values in each column
+
+cols_with_missing= df_final.columns[df_final.isnull().any()].tolist()
+df_missing= df_final[cols_with_missing]
+print(len(cols_with_missing))
+
+#
+missing_matrix=df_missing.isnull().astype(int).corr()
+plt.figure(figsize=(30, 28))
+
+sns.heatmap(
+    missing_matrix, 
+    cmap='RdBu_r', 
+    center=0, 
+    vmin=-1, vmax=1,
+    annot=False, 
+    linewidths=.1, 
+    cbar_kws={"label": "Force de corrélation du manque"}
+)
+
+plt.title("Corrélation entre les valeurs manquantes", fontsize=18)
+plt.show()
+
+
+
+
+df_final_corr=df_final.drop('participant_id',axis=1)
+df_final_corr=df_final_corr.corr()
+plt.figure(figsize=(20, 18))
+
+sns.heatmap(
+    df_final_corr, 
+    cmap='RdBu_r', 
+    center=0, 
+    vmin=-1, vmax=1,
+    annot=False, 
+    linewidths=.1, 
+    cbar_kws={"label": "Force de corrélation du manque"}
+)
+
+plt.title("Corrélation des variables", fontsize=18)
+plt.show()
+
+
+
+
+#
+msno.bar(df_missing)
+plt.title('Proportion de données présentes par variable')
+plt.show()
+
+#
+
+
+
+
+
+msno.dendrogram(df_missing)
+plt.title('Dendrogram')
+plt.show()
 # %% 3. Save to excel file
 #
 #table.to_excel(OUTPUT + "data_demoSmokLiMarsResponse_python.xlsx", index=False)
 #table.to_excel(OUTPUT + "Clinical_data.xlsx", index=False)
 #table.to_csv(OUTPUT + "rlink-predict-response-clinic_v-20260430", index=False)
-
+'''
 df_ = df_final.select_dtypes(exclude = "datetime")
 df_.drop(["DATBIO_PRELI"], axis = 1, inplace = True)
 #cols_to_select = df_.columns[~(df_.columns.str.startswith('BMQ') | df_.columns.str.startswith('MARS') | df_.columns.str.startswith('TRQ'))]
 #df_ = df_[cols_to_select]
 df_.to_csv(OUTPUT + 'CLINICAL_DATA.csv')
 df_
+'''
