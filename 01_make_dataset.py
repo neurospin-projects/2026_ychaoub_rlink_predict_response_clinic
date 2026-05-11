@@ -152,7 +152,7 @@ VARS_TO_INCLUDE_QUESTIONNAIRES = [
 
 baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
 baseline_df = baseline_df[VARS_TO_INCLUDE_PRELI + VARS_TO_INCLUDE_QUESTIONNAIRES ]
-assert baseline_df.shape == (168, 163)
+assert baseline_df.shape == (168, 162)
 
 
 
@@ -222,7 +222,7 @@ final_data = pd.merge(inclusion_df,
                       on='participant_id', 
                       how='inner'
 )
-assert final_data.shape == (168, 166)
+assert final_data.shape == (168, 165)
 
 
 
@@ -265,7 +265,7 @@ final_data = final_data.merge(
     on='participant_id', 
     how = "left"
 )
-assert final_data.shape == (168, 174)
+assert final_data.shape == (168, 173)
 
 
 
@@ -295,31 +295,46 @@ Variables_supp=['participant_id', 'AGE', 'SEX',
 Variables_to_drop = ['AGE', 'SEX', #variables_in_inclusion
                      'DeltaBMI','Delta_BMI_impute','DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP','DeltaBZD', #M03_in_Delta
                      'QIDS_W1_M03','BMI_M03','BRMS_W1_M03', #M03
+                     'CTGY-CategorieComorbiditeSomatique_n°1','CTGY-CategorieComorbiditeSomatique_n°2etplus',
+                     'DISEASE-PathologieComorbiditeSomatique_n°1','DISEASE-PathologieComorbiditeSomatique_n°2etplus','DISRDR-Trouble_n°1',
+                     'DISRDR-Trouble_n°2etplus' # columns are not useful for our study
+
                      ]
 Variables_supp_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique','QIDS_TotalScore_M00','BRMS_TotalScore_M00']
 
-#Variables CTGY-CategorieComorbiditeSomatique_n°1','CTGY-CategorieComorbiditeSomatique_n°2etplus','DISEASE-PathologieComorbiditeSomatique_n°1','DISEASE-PathologieComorbiditeSomatique_n°2etplus','PSYHLTH_PLI-ComorbiditePsychiatrique', 'DISRDR-Trouble_n°1','DISRDR-Trouble_n°2etplus'
-Variables_to_keep = [item for item in Variables_supp if item not in Variables_to_drop]
+
+## Differences between final_data and supp_df for AGE and SEX
+# Align by participant_id
+final_sorted = final_data.set_index("participant_id").sort_index()
+supp_sorted = supp_df.set_index("participant_id").sort_index()
+
+# Ensure same index order
+final_sorted, supp_sorted = final_sorted.align(supp_sorted)
+
+# Create mask safely
+mask = (
+    final_sorted["AGE"].ne(supp_sorted["AGE"]) |
+    final_sorted["SEX"].ne(supp_sorted["SEX"])
+)
+
+# Get real differing indices
+diff_indices = final_sorted.index[mask]
+
+print("Differences found:", mask.any())
+print("Differing participant_id:", diff_indices.tolist())
+
+# There are no differences between final_data and supp_df for AGE and SEX when aligned by participant_id
+
+
+
+variables_to_keep = list(set(Variables_supp) - set(Variables_to_drop))
 final_data = final_data.merge(
-    supp_df[Variables_to_keep], 
+    supp_df[variables_to_keep], 
     on='participant_id', 
     how = "inner"
 )
-assert final_data.shape == (168, 193)
+assert final_data.shape == (168, 186)
 
-
-#Variables Somatic comorbidity and Psychiatric comorbidity ###########################################################################
-
-supp_df['CTGY-CategorieComorbiditeSomatique_n°1'].unique()
-supp_df['CTGY-CategorieComorbiditeSomatique_n°2etplus'].unique()
-
-
-supp_df['DISEASE-PathologieComorbiditeSomatique_n°1'].unique()
-supp_df['DISEASE-PathologieComorbiditeSomatique_n°2etplus'].unique()
-
-
-supp_df['DISRDR-Trouble_n°1'].unique()
-supp_df['DISRDR-Trouble_n°2etplus'].unique()
 
 
 
@@ -349,6 +364,13 @@ high_corr_pairs
 # BRMS_TotalScore_M00 = BRMSTSC_PRELI
 final_data = final_data.drop(columns=Variables_supp_in_final_data)
 
+
+final_data = final_data.rename(columns={
+    "PSYHLTH_PLI-ComorbiditePsychiatrique": "Psychiatric_Comorbidity",
+    "PHCMBY_PLI": "Somatic_Comorbidity"
+})
+
+
 ## Merging response variable and base
 
 final_data = pd.merge(
@@ -357,7 +379,7 @@ final_data = pd.merge(
     on='participant_id', 
     how='inner'
 )
-assert final_data.shape == (138, 191)  #30 individuals have no value for the response variable.
+assert final_data.shape == (138, 184)  #30 individuals have no value for the response variable.
 
 final_data= final_data.replace('ND',np.nan) #Replace 'ND' values with NaN as they represent missing data
 
@@ -403,7 +425,7 @@ cols_to_drop = final_data.columns[final_data.apply(lambda x: x.isna().mean(), ax
 df_final = final_data.drop(cols_to_drop, axis = 1)
 df_final.info()
 
-assert df_final.shape == (138, 155) 
+assert df_final.shape == (138, 154) 
 
 
 ###Missing_per row
@@ -422,6 +444,85 @@ plt.show()
 
 # the maximum is 48.34% -> Keep all observations
 
+
+
+### Imputation
+# ── Binaires ──────────────────────────────────────────────────────────────────
+binary_cols = [
+    "CENTERNUM", "SEX", "MIX_PRELI", "JOB_PRELI", "EVNT_PRELI", "TSH_PRELI",
+    "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI",
+    "HYPOE1_PLI",
+    "BRMSTSC_PRELI", "SSRS1_PRELI", "SSRS2_PRELI", "BPRSTSC_PRELI",
+    "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI",
+    "MARS6_PRELI", "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI",
+    "TRQ_PRELI", "TRQ1_PRELI",
+    "BMQ18_PRELI",
+    "WHOA1A_PLI", "WHOA1B_PLI", "WHOA1C_PLI", "WHOA1D_PLI",
+    "WHOA1E_PLI", "WHOA1F_PLI", "WHOA1G_PLI",
+    "BMI_M00", "DensityHospit", "SuicideAttempts(Yes/No)",
+]
+
+# ── Continues ─────────────────────────────────────────────────────────────────
+continuous_cols = [
+    "AGE", "HOSP_PRELI", "WEIGHT_PRELI", "HEIGHT_PRELI", "WAIST_PRELI",
+    "SBP_PRELI",
+    "CURRMED_PRELI", "NA_PRELI", "K_PRELI", "CA_PRELI", "UREA_PRELI",
+    "CREAT_PRELI", "EGFR_PRELI", "MDRD_PRELI", "CKDEPI_PRELI",
+    "RCY1_PLI", "MDE1_PLI", "MDEH1_PLI", "MDEPS1_PLI", "MDEMC1_PLI", "MDETD1_PLI",
+    "HYPOEH1_PLI", "HYPOEMC1_PLI", "HYPOETD1_PLI",
+    "MANE1_PLI", "MANEH1_PLI", "MANEPS1_PLI", "MANEMC1_PLI", "MANETD1_PLI",
+    "NBH1_PLI", "TDH1_PLI", "AD1_PLI", "SUD1_PLI",
+    "RCY2_PLI", "MDE2_PLI", "MDEH2_PLI", "MDEPS2_PLI", "MDEMC2_PLI", "MDETD2_PLI",
+    "AGEMDE2_PLI",
+    "HYPOEH2_PLI", "HYPOEMC2_PLI", "HYPOETD2_PLI", "AGEHYPOE2_PLI",
+    "MANE2_PLI", "MANEH2_PLI", "MANEPS2_PLI", "MANEMC2_PLI", "MANETD2_PLI",
+    "AGEMANE2_PLI",
+    "NBH2_PLI", "TDH2_PLI", "AGESTBH2_PLI", "AD2_PLI", "SUD2_PLI", "MC2_PLI",
+    "QIDSTSC_PRELI", "SSRS6_PRELI",
+    "TRQ4_PRELI", "TRQ6_PRELI",
+    "WHOA1H_PLI",
+    "BMQ_NECESSITY", "BMQ_PREOCCUPATION", "BMQ_DIFFERENTIAL", "BMQ_GENERAL",
+    "fhist_count", "fhist_ratio_h", "fhist_repli",
+    "Psychiatric_Comorbidity", "DensityEpisodes",
+    "NbHospitalizationsLifetime", "SmokingStatus-WHOA1A_PLI",
+    "AgeAtOnset", "NumberPreviousEpisodes", "DurationIllness",
+]
+
+# ── Catégorielles ordinales ───────────────────────────────────────────────────
+ordinal_cols = [
+    "MOODYN_PRELI",       # 1-3
+    "DBP_PRELI",          # stades 1-7
+    "SCHOOL_PRELI",       # niveau scolaire 1-8
+    "Somatic_Comorbidity",# 0-2
+    "OUTW1_PLI",          # résultat période 1
+    "NBS1_PLI",           # nb épisodes sévères 1
+    "MC1_PLI",            # comorbidité médicale 1
+    "HYPOE2_PLI",         # 0-3
+    "OUTW2_PLI",          # résultat période 2
+    "NBS2_PLI",           # nb épisodes sévères 2
+    "MARS10_PRELI",       # 1-2
+    "MARS_TOTAL",         # 1-5
+    "TRQ2_PRELI",         # 1-3
+    "TRQ5_PRELI",         # 1-3
+    "TRQ7_PRELI",         # 1-5
+    "BMQ1_PRELI",  "BMQ2_PRELI",  "BMQ3_PRELI",  "BMQ4_PRELI",  "BMQ5_PRELI",
+    "BMQ6_PRELI",  "BMQ7_PRELI",  "BMQ8_PRELI",  "BMQ9_PRELI",  "BMQ10_PRELI",
+    "BMQ11_PRELI", "BMQ12_PRELI", "BMQ13_PRELI", "BMQ14_PRELI", "BMQ15_PRELI",
+    "BMQ16_PRELI", "BMQ17_PRELI",
+]
+
+# ── Catégorielles nominales ───────────────────────────────────────────────────
+nominal_cols = [
+    "TYPEP_PRELI",      # type de trouble
+    "RELSTAT_PRELI",    # statut relationnel
+    "ETHNICITY_PRELI",  # ethnicité
+    "CORG_PRELI",       # organisation des soins
+    "LIVSIT_PRELI",     # situation de vie
+    "RESIDENCE_PRELI",  # type de résidence
+    "FHIST_PLI",        # histoire familiale
+]
+
+'''
 ###Handling missing values in each column
 
 cols_with_missing= df_final.columns[df_final.isnull().any()].tolist()
@@ -481,7 +582,11 @@ plt.show()
 
 msno.dendrogram(df_missing)
 plt.title('Dendrogram')
-plt.show()
+plt.show()'''
+
+
+
+
 # %% 3. Save to excel file
 #
 #table.to_excel(OUTPUT + "data_demoSmokLiMarsResponse_python.xlsx", index=False)
