@@ -4,8 +4,10 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import os
-import missingno as msno
 from sklearn.preprocessing import LabelEncoder
+from sklearn.impute import SimpleImputer
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
 
 # %% Set path to inout data and output results according to your local configuration
 
@@ -287,7 +289,7 @@ Variables_supp=['participant_id', 'AGE', 'SEX',
        'DISEASE-PathologieComorbiditeSomatique_n°2etplus',
        'PSYHLTH_PLI-ComorbiditePsychiatrique', 'DISRDR-Trouble_n°1',
        'DISRDR-Trouble_n°2etplus', 'AgeAtOnset', 'NumberPreviousEpisodes',
-       'DurationIllness', 'DensityEpisodes', 'NbHospitalizationsLifetime',
+       'DurationIllness', 'DensityEpisodes', 
        'DensityHospit', 'SmokingStatus-WHOA1A_PLI', 'SuicideAttempts(Yes/No)',
        'QIDS_TotalScore_M00', 'QIDS_W1_M03', 'BRMS_TotalScore_M00',
        'BRMS_W1_M03', 'DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP',
@@ -300,7 +302,7 @@ Variables_to_drop = ['AGE', 'SEX', #variables_in_inclusion
                      'DISRDR-Trouble_n°2etplus' # columns are not useful for our study
 
                      ]
-Variables_supp_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique','QIDS_TotalScore_M00','BRMS_TotalScore_M00']
+Variables_supp_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique','QIDS_TotalScore_M00','BRMS_TotalScore_M00','NbHospitalizationsLifetime']
 
 
 ## Differences between final_data and supp_df for AGE and SEX
@@ -447,7 +449,7 @@ plt.show()
 
 
 ### Imputation
-# ── Binaires ──────────────────────────────────────────────────────────────────
+
 binary_cols = [
     "CENTERNUM", "SEX", "MIX_PRELI", "JOB_PRELI", "EVNT_PRELI", "TSH_PRELI",
     "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI",
@@ -462,7 +464,6 @@ binary_cols = [
     "BMI_M00", "DensityHospit", "SuicideAttempts(Yes/No)",
 ]
 
-# ── Continues ─────────────────────────────────────────────────────────────────
 continuous_cols = [
     "AGE", "HOSP_PRELI", "WEIGHT_PRELI", "HEIGHT_PRELI", "WAIST_PRELI",
     "SBP_PRELI",
@@ -488,7 +489,7 @@ continuous_cols = [
     "AgeAtOnset", "NumberPreviousEpisodes", "DurationIllness",
 ]
 
-# ── Catégorielles ordinales ───────────────────────────────────────────────────
+
 ordinal_cols = [
     "MOODYN_PRELI",       # 1-3
     "DBP_PRELI",          # stades 1-7
@@ -511,7 +512,7 @@ ordinal_cols = [
     "BMQ16_PRELI", "BMQ17_PRELI",
 ]
 
-# ── Catégorielles nominales ───────────────────────────────────────────────────
+
 nominal_cols = [
     "TYPEP_PRELI",      # type de trouble
     "RELSTAT_PRELI",    # statut relationnel
@@ -521,6 +522,172 @@ nominal_cols = [
     "RESIDENCE_PRELI",  # type de résidence
     "FHIST_PLI",        # histoire familiale
 ]
+
+
+
+
+mode_imputer = SimpleImputer(strategy="most_frequent")
+df_final[binary_cols] = mode_imputer.fit_transform(df_final[binary_cols])
+
+
+df_final[nominal_cols] = mode_imputer.fit_transform(df_final[nominal_cols])
+
+
+median_imputer = SimpleImputer(strategy="median")
+df_final[ordinal_cols] = median_imputer.fit_transform(df_final[ordinal_cols])
+
+
+mean_imputer = SimpleImputer(strategy="mean")
+df_final[continuous_cols] = mean_imputer.fit_transform(df_final[continuous_cols])
+
+print(df_final.isnull().sum().sum()) 
+
+### X, y ###
+
+X = df_final.drop(["response", "participant_id"], axis = 1)
+y = df_final["response"]
+
+
+
+# Rename columns
+
+labels={"MOODYN_PRELI": "Current mood episode (MOODYN_PRELI)",
+        "TYPEP_PRELI": "Type of episode (TYPEP_PRELI)",
+        "PS_PRELI": 'With psychotic sympt. (PS_PRELI)',
+        "MIX_PRELI": "With mixed characteristics (MIX_PRELI)",
+        "HOSP_PRELI": "Currently hospitalized (HOSP_PRELI)",
+        "WEIGHT_PRELI":"Weight (WEIGHT_PRELI)",
+        "HEIGHT_PRELI":"Height (HEIGHT_PRELI)",
+        "SBP_PRELI":"Systolic BP (SBP_PRELI)",
+        "DBP_PRELI":"Diastolic BP (DBP_PRELI)",
+        "RELSTAT_PRELI": "Relationship status (RELSTAT_PRELI)",
+        "ETHNICITY_PRELI": "Ethnicity (ETHNICITY_PRELI)",
+        "CORG_PRELI": "Country of Origin (CORG_PRELI)",
+        "LIVSIT_PRELI": "Living situation (LIVSIT_PRELI)",
+        "RESIDENCE_PRELI": "Place of Residence (RESIDENCE_PRELI)",
+        "SCHOOL_PRELI": "Highest qualification (SCHOOL_PRELI)",
+        "JOB_PRELI": "Employment status (JOB_PRELI)",
+        "EVNT_PRELI": "Recent stressful events inf. 12 mo (EVNT_PRELI)",
+        "CURRMED_PRELI": "Current medications (CURRMED_PRELI)",
+        "NA_PRELI": "Sodium (NA_PRELI)",
+        'K_PRELI': 'Potassium (K_PRELI)',
+        'CL_PRELI': "Chlore (CL_PRELI)",
+        'CA_PRELI': "Calcium (CA_PRELI)",
+        "PROTEINS_PRELI": "Proteins (PROTEINS_PRELI)",
+        "UREA_PRELI": "Urea (UREA_PRELI)",
+        "CREAT_PRELI": "Creatinine (CREAT_PRELI)",
+        "EGFR_PRELI": "Glomerular filtration rate (EGFR)(EGFR_PRELI)",
+        "MDRD_PRELI": "Glomerular filtration rate (EGFR) MDRD (MDRD_PRELI)",
+        'CKDEPI_PRELI': "Glomerular filtration rate (EGFR) (CKDEPI_PRELI)",
+        "TSH_PRELI": "TSH (TSH_PRELI)",
+        'HB_PRELI': "Hemoglobin (HB_PRELI)",
+        "PLT_PRELI": "PLatelets (PLT_PRELI)",
+        "QIDSTSC_PRELI":"QIDS Total (QIDSTSC_PRELI)",
+        "BRMSTSC_PRELI": 'BRMS Total (BRMSTSC_PRELI)',
+        "BPRSTSC_PRELI": "BPRS Total (BPRSTSC_PRELI)",
+        'SEX': "Male sex",
+        "response": "Lithium Response (4 levels)",
+        "response_2": "Lithium Response (Binary)",
+        "FHIST_PLI": "Family history",
+        "fhist_count":"F.hist absolute count",
+        "fhist_ratio_h": "F.Hist male ratio",
+        "fhist_repli": "F.Hist positive lithium response",
+        "MOOD_PLI": "Mood stabilizers - 2y",
+        "ANTIPSY_PLI": "Antipsychotics - 2y",
+        "NEUROL_PLI": "Neuroleptics - 2y",
+        "ANTIDEP_PLI": "Antidepressants - 2y",
+        "BENZOS_PLI": "Benzodiazepines - 2y",
+        "PHCMBY_PLI": "Physical comorbidity",
+        "RCY1_PLI": "Rapid cycling - 2y",
+        "MDE1_PLI":"Depressive. ep. total duration (w) -2y",
+        "MDEH1_PLI": 'MDE hospitalized -duration (w)-2y',
+        "MDEPS1_PLI": "MDE psychotic symptoms duration (w)- 2y",
+        "MDEMC1_PLI": "MDE mixed duration (w) - 2y"   
+        }
+
+
+X_imputed_= X.rename(columns = labels)
+
+# final_data_dummy = pd.get_dummies(X_imputed_)
+
+# Convertir toutes les colonnes object en float
+X[X.select_dtypes(include='object').columns] = (
+    X.select_dtypes(include='object').astype(float)
+)
+
+# Vérification
+print(X.dtypes.value_counts())
+
+
+### Correlation matrix
+
+corr_matrix = X.corr()
+
+plt.figure(figsize=(20, 16))
+sns.heatmap(
+    corr_matrix,
+    annot=False,        # True si peu de colonnes
+    fmt=".2f",
+    cmap="coolwarm",
+    center=0,
+    vmin=-1, vmax=1,
+    linewidths=0.3,
+    square=True,
+)
+plt.title("Matrice de corrélation", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# Matrice de corrélation de Spearman
+corr_matrix_spearman = X.corr(method='spearman')
+
+plt.figure(figsize=(20, 16))
+sns.heatmap(
+    corr_matrix_spearman,
+    annot=False,        # True si peu de colonnes
+    fmt=".2f",
+    cmap="coolwarm",
+    center=0,
+    vmin=-1, vmax=1,
+    linewidths=0.3,
+    square=True,
+)
+plt.title("Matrice de corrélation (Spearman)", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+
+def high_correlation_pairs(X, threshold=0.8):
+    corr_matrix = X.corr(method="spearman")
+    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+    
+    high_corr = (
+        upper.stack()
+        .reset_index()
+        .rename(columns={"level_0": "var1", "level_1": "var2", 0: "correlation"})
+    )
+    high_corr = high_corr[high_corr["correlation"].abs() > threshold]
+    high_corr = high_corr.sort_values("correlation", ascending=False).reset_index(drop=True)
+    
+    return high_corr
+
+pairs = high_correlation_pairs(X, threshold=0.7)
+print(f"{len(pairs)} paires avec |r| > 0.7\n")
+print(pairs.to_string())
+
+### Multicolinerarity assessment: Matrix and VIF 
+
+# ── Calcul du VIF ─────────────────────────────────────────────────────────────
+def compute_vif(X):
+    vif = pd.DataFrame()
+    vif["feature"] = X.columns
+    vif["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+    return vif.sort_values("VIF", ascending=False).reset_index(drop=True)
+
+vif_df = compute_vif(X)
+print(vif_df)
+
+
 
 '''
 ###Handling missing values in each column
