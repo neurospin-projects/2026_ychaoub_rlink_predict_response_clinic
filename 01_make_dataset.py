@@ -237,6 +237,18 @@ final_data['BMQ_GENERAL'] = final_data['BMQ11_PRELI'] +final_data['BMQ12_PRELI']
 final_data['MARS_TOTAL'] = np.sum(final_data[final_data.columns[final_data.columns.str.startswith('MARS')]], axis = 1)
 
 
+# Drop columns BMQ1 - BMQ18
+bmq_cols = [f'BMQ{i}_PRELI' for i in range(1, 19)]
+final_data = final_data.drop(columns=bmq_cols)
+
+# Drop columns MARS except MARS_TOTAL
+mars_cols = [
+    col for col in final_data.columns
+    if col.startswith('MARS') and col != 'MARS_TOTAL'
+]
+
+final_data = final_data.drop(columns=mars_cols)
+
 #Data cleaning
 final_data["FHIST_PLI"].replace(9.0, 0.0, inplace = True)
 
@@ -267,7 +279,7 @@ final_data = final_data.merge(
     on='participant_id', 
     how = "left"
 )
-assert final_data.shape == (168, 173)
+assert final_data.shape == (168, 145)
 
 
 
@@ -289,7 +301,7 @@ Variables_supp=['participant_id', 'AGE', 'SEX',
        'DISEASE-PathologieComorbiditeSomatique_n°2etplus',
        'PSYHLTH_PLI-ComorbiditePsychiatrique', 'DISRDR-Trouble_n°1',
        'DISRDR-Trouble_n°2etplus', 'AgeAtOnset', 'NumberPreviousEpisodes',
-       'DurationIllness', 'DensityEpisodes', 
+       'DurationIllness', 'DensityEpisodes', 'NbHospitalizationsLifetime',
        'DensityHospit', 'SmokingStatus-WHOA1A_PLI', 'SuicideAttempts(Yes/No)',
        'QIDS_TotalScore_M00', 'QIDS_W1_M03', 'BRMS_TotalScore_M00',
        'BRMS_W1_M03', 'DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP',
@@ -302,7 +314,10 @@ Variables_to_drop = ['AGE', 'SEX', #variables_in_inclusion
                      'DISRDR-Trouble_n°2etplus' # columns are not useful for our study
 
                      ]
-Variables_supp_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique','QIDS_TotalScore_M00','BRMS_TotalScore_M00','NbHospitalizationsLifetime']
+Variables_supp_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique','QIDS_TotalScore_M00'
+                              ,'BRMS_TotalScore_M00','NbHospitalizationsLifetime',
+                              'SmokingStatus-WHOA1A_PLI',
+                              ]
 
 
 ## Differences between final_data and supp_df for AGE and SEX
@@ -335,7 +350,7 @@ final_data = final_data.merge(
     on='participant_id', 
     how = "inner"
 )
-assert final_data.shape == (168, 186)
+assert final_data.shape == (168, 158)
 
 
 
@@ -353,6 +368,8 @@ corr_matrix = df_corr[cols_num].corr()
 cols_num=cols_num.drop('PHCMBY_PLI-ComorbiditeSomatique')
 cols_num=cols_num.drop('QIDS_TotalScore_M00')
 cols_num=cols_num.drop('BRMS_TotalScore_M00')
+cols_num=cols_num.drop('NbHospitalizationsLifetime')
+cols_num=cols_num.drop('SmokingStatus-WHOA1A_PLI')
 
 result = corr_matrix.loc[Variables_supp_in_final_data,cols_num]
 constent=0.9
@@ -364,12 +381,25 @@ high_corr_pairs
 # PHCMBY_PLI-ComorbiditeSomatique = PHCMBY_PLI
 # QIDS_TotalScore_M00 = QIDSTSC_PRELI
 # BRMS_TotalScore_M00 = BRMSTSC_PRELI
+# NbHospitalizationsLifetim = NBH2_PLI
+# SmokingStatus-WHOA1A_PLI = WHOA1A_PLI
+
+rename_dict = {
+    'PHCMBY_PLI': 'PHCMBY_PLI-ComorbiditeSomatique',
+    'QIDSTSC_PRELI': 'QIDS_TotalScore_M00',
+    'BRMSTSC_PRELI': 'BRMS_TotalScore_M00',
+    'NBH2_PLI': 'NbHospitalizationsLifetime',
+    'WHOA1A_PLI': 'SmokingStatus-WHOA1A_PLI'
+}
+
+# Suppression des anciennes variables
 final_data = final_data.drop(columns=Variables_supp_in_final_data)
 
+# Renommage des variables restantes
+final_data = final_data.rename(columns=rename_dict)
 
 final_data = final_data.rename(columns={
-    "PSYHLTH_PLI-ComorbiditePsychiatrique": "Psychiatric_Comorbidity",
-    "PHCMBY_PLI": "Somatic_Comorbidity"
+    "PSYHLTH_PLI-ComorbiditePsychiatrique": "Psychiatric_Comorbidity"
 })
 
 
@@ -381,11 +411,17 @@ final_data = pd.merge(
     on='participant_id', 
     how='inner'
 )
-assert final_data.shape == (138, 184)  #30 individuals have no value for the response variable.
+assert final_data.shape == (138, 154)  #30 individuals have no value for the response variable.
 
 final_data= final_data.replace('ND',np.nan) #Replace 'ND' values with NaN as they represent missing data
-
-
+final_data[["MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI"]] = (
+    final_data[["MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI"]]
+    .replace(9, np.nan)
+)
+final_data[["RCY1_PLI","RCY2_PLI"]] = (
+    final_data[["RCY1_PLI","RCY2_PLI"]]
+    .replace(2, np.nan)
+)
 
 ### Filter columns based on missing valeu percentage
 final_data.apply(lambda x: (x.isna().mean())*100, axis = 0)
@@ -427,7 +463,7 @@ cols_to_drop = final_data.columns[final_data.apply(lambda x: x.isna().mean(), ax
 df_final = final_data.drop(cols_to_drop, axis = 1)
 df_final.info()
 
-assert df_final.shape == (138, 154) 
+assert df_final.shape == (138, 124) 
 
 
 ###Missing_per row
@@ -448,68 +484,77 @@ plt.show()
 
 
 
+statistic_df= df_final
+
+'''
+#test the correlation before impotation
+
+def high_correlation_pairs(X, threshold=0.8):
+    corr_matrix = X.corr(method="spearman")
+    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+    
+    high_corr = (
+        upper.stack()
+        .reset_index()
+        .rename(columns={"level_0": "var1", "level_1": "var2", 0: "correlation"})
+    )
+    high_corr = high_corr[high_corr["correlation"].abs() > threshold]
+    high_corr = high_corr.sort_values("correlation", ascending=False).reset_index(drop=True)
+    
+    return high_corr
+df_final=df_final.drop("participant_id",axis=1)
+pairs = high_correlation_pairs(df_final, threshold=0.85)
+print(f"{len(pairs)} paires avec |r| > 0.85\n")
+print(pairs.to_string())
+
+'''
+
 ### Imputation
 
 binary_cols = [
     "CENTERNUM", "SEX", "MIX_PRELI", "JOB_PRELI", "EVNT_PRELI", "TSH_PRELI",
-    "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI",
-    "HYPOE1_PLI",
-    "BRMSTSC_PRELI", "SSRS1_PRELI", "SSRS2_PRELI", "BPRSTSC_PRELI",
-    "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI",
-    "MARS6_PRELI", "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI",
-    "TRQ_PRELI", "TRQ1_PRELI",
-    "BMQ18_PRELI",
-    "WHOA1A_PLI", "WHOA1B_PLI", "WHOA1C_PLI", "WHOA1D_PLI",
-    "WHOA1E_PLI", "WHOA1F_PLI", "WHOA1G_PLI",
-    "BMI_M00", "DensityHospit", "SuicideAttempts(Yes/No)",
+    "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI","CURRMED_PRELI",
+    "HYPOE1_PLI", "SSRS1_PRELI", "SSRS2_PRELI","RCY1_PLI","RCY2_PLI","Psychiatric_Comorbidity",
+    "TRQ_PRELI", "TRQ1_PRELI","HOSP_PRELI","MOODYN_PRELI","FHIST_PLI", "SmokingStatus-WHOA1A_PLI",
+    "WHOA1B_PLI", "WHOA1C_PLI", "WHOA1D_PLI","SSRS6_PRELI",
+    "WHOA1E_PLI", "WHOA1F_PLI", "WHOA1G_PLI","PHCMBY_PLI-ComorbiditeSomatique","WHOA1H_PLI",
+    "BMI_M00", "DensityHospit", "SuicideAttempts(Yes/No)","TRQ2_PRELI",
 ]
 
 continuous_cols = [
-    "AGE", "HOSP_PRELI", "WEIGHT_PRELI", "HEIGHT_PRELI", "WAIST_PRELI",
-    "SBP_PRELI",
-    "CURRMED_PRELI", "NA_PRELI", "K_PRELI", "CA_PRELI", "UREA_PRELI",
+    "AGE",  "WEIGHT_PRELI", "HEIGHT_PRELI", "WAIST_PRELI","SBP_PRELI", 
+     "NA_PRELI", "K_PRELI", "CA_PRELI", "UREA_PRELI","BPRSTSC_PRELI",
     "CREAT_PRELI", "EGFR_PRELI", "MDRD_PRELI", "CKDEPI_PRELI",
-    "RCY1_PLI", "MDE1_PLI", "MDEH1_PLI", "MDEPS1_PLI", "MDEMC1_PLI", "MDETD1_PLI",
-    "HYPOEH1_PLI", "HYPOEMC1_PLI", "HYPOETD1_PLI",
+     "MDE1_PLI", "MDEH1_PLI", "MDEPS1_PLI", "MDEMC1_PLI", "MDETD1_PLI",
     "MANE1_PLI", "MANEH1_PLI", "MANEPS1_PLI", "MANEMC1_PLI", "MANETD1_PLI",
-    "NBH1_PLI", "TDH1_PLI", "AD1_PLI", "SUD1_PLI",
-    "RCY2_PLI", "MDE2_PLI", "MDEH2_PLI", "MDEPS2_PLI", "MDEMC2_PLI", "MDETD2_PLI",
-    "AGEMDE2_PLI",
+    "NBH1_PLI", "TDH1_PLI", "AD1_PLI", "SUD1_PLI","AGEMANE2_PLI",
+     "MDE2_PLI", "MDEH2_PLI", "MDEPS2_PLI", "MDEMC2_PLI", "MDETD2_PLI","AGEMDE2_PLI",
     "HYPOEH2_PLI", "HYPOEMC2_PLI", "HYPOETD2_PLI", "AGEHYPOE2_PLI",
     "MANE2_PLI", "MANEH2_PLI", "MANEPS2_PLI", "MANEMC2_PLI", "MANETD2_PLI",
-    "AGEMANE2_PLI",
-    "NBH2_PLI", "TDH2_PLI", "AGESTBH2_PLI", "AD2_PLI", "SUD2_PLI", "MC2_PLI",
-    "QIDSTSC_PRELI", "SSRS6_PRELI",
-    "TRQ4_PRELI", "TRQ6_PRELI",
-    "WHOA1H_PLI",
+    "NbHospitalizationsLifetime", "TDH2_PLI", "AGESTBH2_PLI", "AD2_PLI", "SUD2_PLI", "MC2_PLI",
+    "QIDS_TotalScore_M00", "BRMS_TotalScore_M00","HYPOEH1_PLI", "HYPOEMC1_PLI", "HYPOETD1_PLI",
     "BMQ_NECESSITY", "BMQ_PREOCCUPATION", "BMQ_DIFFERENTIAL", "BMQ_GENERAL",
-    "fhist_count", "fhist_ratio_h", "fhist_repli",
-    "Psychiatric_Comorbidity", "DensityEpisodes",
-    "NbHospitalizationsLifetime", "SmokingStatus-WHOA1A_PLI",
+    "fhist_count", "fhist_ratio_h", "fhist_repli","DensityEpisodes",
     "AgeAtOnset", "NumberPreviousEpisodes", "DurationIllness",
 ]
 
 
+
+
 ordinal_cols = [
-    "MOODYN_PRELI",       # 1-3
     "DBP_PRELI",          # stades 1-7
     "SCHOOL_PRELI",       # niveau scolaire 1-8
-    "Somatic_Comorbidity",# 0-2
     "OUTW1_PLI",          # résultat période 1
     "NBS1_PLI",           # nb épisodes sévères 1
     "MC1_PLI",            # comorbidité médicale 1
     "HYPOE2_PLI",         # 0-3
     "OUTW2_PLI",          # résultat période 2
     "NBS2_PLI",           # nb épisodes sévères 2
-    "MARS10_PRELI",       # 1-2
     "MARS_TOTAL",         # 1-5
-    "TRQ2_PRELI",         # 1-3
     "TRQ5_PRELI",         # 1-3
     "TRQ7_PRELI",         # 1-5
-    "BMQ1_PRELI",  "BMQ2_PRELI",  "BMQ3_PRELI",  "BMQ4_PRELI",  "BMQ5_PRELI",
-    "BMQ6_PRELI",  "BMQ7_PRELI",  "BMQ8_PRELI",  "BMQ9_PRELI",  "BMQ10_PRELI",
-    "BMQ11_PRELI", "BMQ12_PRELI", "BMQ13_PRELI", "BMQ14_PRELI", "BMQ15_PRELI",
-    "BMQ16_PRELI", "BMQ17_PRELI",
+    "TRQ4_PRELI",
+    "TRQ6_PRELI",
 ]
 
 
@@ -520,7 +565,6 @@ nominal_cols = [
     "CORG_PRELI",       # organisation des soins
     "LIVSIT_PRELI",     # situation de vie
     "RESIDENCE_PRELI",  # type de résidence
-    "FHIST_PLI",        # histoire familiale
 ]
 
 
@@ -532,20 +576,15 @@ df_final[binary_cols] = mode_imputer.fit_transform(df_final[binary_cols])
 
 df_final[nominal_cols] = mode_imputer.fit_transform(df_final[nominal_cols])
 
-
 median_imputer = SimpleImputer(strategy="median")
-df_final[ordinal_cols] = median_imputer.fit_transform(df_final[ordinal_cols])
+df_final[continuous_cols] = median_imputer.fit_transform(df_final[continuous_cols])  
 
+mode_imputer = SimpleImputer(strategy="most_frequent")
+df_final[ordinal_cols] = mode_imputer.fit_transform(df_final[ordinal_cols])
 
-mean_imputer = SimpleImputer(strategy="mean")
-df_final[continuous_cols] = mean_imputer.fit_transform(df_final[continuous_cols])
 
 print(df_final.isnull().sum().sum()) 
 
-### X, y ###
-
-X = df_final.drop(["response", "participant_id"], axis = 1)
-y = df_final["response"]
 
 
 
@@ -587,7 +626,6 @@ labels={"MOODYN_PRELI": "Current mood episode (MOODYN_PRELI)",
         "BPRSTSC_PRELI": "BPRS Total (BPRSTSC_PRELI)",
         'SEX': "Male sex",
         "response": "Lithium Response (4 levels)",
-        "response_2": "Lithium Response (Binary)",
         "FHIST_PLI": "Family history",
         "fhist_count":"F.hist absolute count",
         "fhist_ratio_h": "F.Hist male ratio",
@@ -605,8 +643,15 @@ labels={"MOODYN_PRELI": "Current mood episode (MOODYN_PRELI)",
         "MDEMC1_PLI": "MDE mixed duration (w) - 2y"   
         }
 
+df_final= df_final.rename(columns = labels)
 
-X_imputed_= X.rename(columns = labels)
+### X, y ###
+
+y = df_final["Lithium Response (4 levels)"]
+
+X = df_final.drop(columns=["Lithium Response (4 levels)", "participant_id"])
+
+
 
 # final_data_dummy = pd.get_dummies(X_imputed_)
 
@@ -626,7 +671,7 @@ corr_matrix = X.corr()
 plt.figure(figsize=(20, 16))
 sns.heatmap(
     corr_matrix,
-    annot=False,        # True si peu de colonnes
+    annot=False,        
     fmt=".2f",
     cmap="coolwarm",
     center=0,
@@ -635,24 +680,6 @@ sns.heatmap(
     square=True,
 )
 plt.title("Matrice de corrélation", fontsize=14)
-plt.tight_layout()
-plt.show()
-
-# Matrice de corrélation de Spearman
-corr_matrix_spearman = X.corr(method='spearman')
-
-plt.figure(figsize=(20, 16))
-sns.heatmap(
-    corr_matrix_spearman,
-    annot=False,        # True si peu de colonnes
-    fmt=".2f",
-    cmap="coolwarm",
-    center=0,
-    vmin=-1, vmax=1,
-    linewidths=0.3,
-    square=True,
-)
-plt.title("Matrice de corrélation (Spearman)", fontsize=14)
 plt.tight_layout()
 plt.show()
 
@@ -671,9 +698,29 @@ def high_correlation_pairs(X, threshold=0.8):
     
     return high_corr
 
-pairs = high_correlation_pairs(X, threshold=0.7)
-print(f"{len(pairs)} paires avec |r| > 0.7\n")
+pairs = high_correlation_pairs(X, threshold=0.85)
+print(f"{len(pairs)} paires avec |r| > 0.85\n")
 print(pairs.to_string())
+
+remaining_to_remove = [
+    "NBS2_PLI",        # = SuicideAttempts(Yes/No) (r=0.99)     (Number of suicide attempts - SuicideAttempts(Yes/No) )
+    "MDRD_PRELI",      # = CKDEPI_PRELI (r=0.95)                (CKDEPI_PRELI - MDRD_PRELI)
+    "WHOA1A_PLI",      # = SmokingStatus-WHOA1A_PLI (r=0.94)    (Tobacco products (cigarettes, chewing tobacco, cigars, etc.) - SmokingStatus )
+    "NBH1_PLI",        # = TDH1_PLI (r=0.88)                    (Number of hospitalizations - Total duration of hospitalizations )
+    "AD2_PLI",         # = AD1_PLI (r=0.87)                     (Anxity disorders in the last in the life time - 2 yrs )
+    "MDE2_PLI",        # = NumberPreviousEpisodes (r=0.85)      (Major Depressive episodes - NumberPreviousEpisodes)
+]
+
+
+remaining_to_remove = [c for c in remaining_to_remove if c in X.columns]
+
+X_clean = X.drop(columns=remaining_to_remove)
+
+print(f"{X.shape[1]} colonnes → {X_clean.shape[1]} colonnes conservées")
+
+pairs_final = high_correlation_pairs(X_clean, threshold=0.85)
+print(f"\nPaires restantes avec |r| > 0.85 : {len(pairs_final)}")
+print(pairs_final.to_string())
 
 ### Multicolinerarity assessment: Matrix and VIF 
 
@@ -684,72 +731,8 @@ def compute_vif(X):
     vif["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
     return vif.sort_values("VIF", ascending=False).reset_index(drop=True)
 
-vif_df = compute_vif(X)
+vif_df = compute_vif(X_clean)
 print(vif_df)
-
-
-
-'''
-###Handling missing values in each column
-
-cols_with_missing= df_final.columns[df_final.isnull().any()].tolist()
-df_missing= df_final[cols_with_missing]
-print(len(cols_with_missing))
-
-#
-missing_matrix=df_missing.isnull().astype(int).corr()
-plt.figure(figsize=(30, 28))
-
-sns.heatmap(
-    missing_matrix, 
-    cmap='RdBu_r', 
-    center=0, 
-    vmin=-1, vmax=1,
-    annot=False, 
-    linewidths=.1, 
-    cbar_kws={"label": "Force de corrélation du manque"}
-)
-
-plt.title("Corrélation entre les valeurs manquantes", fontsize=18)
-plt.show()
-
-
-
-
-df_final_corr=df_final.drop('participant_id',axis=1)
-df_final_corr=df_final_corr.corr()
-plt.figure(figsize=(20, 18))
-
-sns.heatmap(
-    df_final_corr, 
-    cmap='RdBu_r', 
-    center=0, 
-    vmin=-1, vmax=1,
-    annot=False, 
-    linewidths=.1, 
-    cbar_kws={"label": "Force de corrélation du manque"}
-)
-
-plt.title("Corrélation des variables", fontsize=18)
-plt.show()
-
-
-
-
-#
-msno.bar(df_missing)
-plt.title('Proportion de données présentes par variable')
-plt.show()
-
-#
-
-
-
-
-
-msno.dendrogram(df_missing)
-plt.title('Dendrogram')
-plt.show()'''
 
 
 
