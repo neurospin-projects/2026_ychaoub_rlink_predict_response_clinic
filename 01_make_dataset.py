@@ -206,13 +206,15 @@ sns.countplot(x = "Response.Status.at.end.of.follow.up", data = final_response)
 plt.ylabel("Absolute counts")
 plt.xlabel('Status')
 plt.title("Response status at end of follow up")
+#plt.savefig("Distribution de la variable Response avant le traitement")
 plt.show()
 # Plotting response variable 
 
 sns.countplot(x = "response", data = Response)
 plt.ylabel("Absolute counts")
 plt.xlabel('Status')
-plt.title("Response status at end of follow up")
+plt.title("Response status at end of follow up (Binary output)")
+#plt.savefig("Distribution de la variable Response apres le traitement")
 plt.show()
 
 
@@ -239,7 +241,7 @@ final_data['MARS_TOTAL'] = np.sum(final_data[final_data.columns[final_data.colum
 
 # Drop columns BMQ1 - BMQ18
 bmq_cols = [f'BMQ{i}_PRELI' for i in range(1, 19)]
-final_data = final_data.drop(columns=bmq_cols)
+#final_data = final_data.drop(columns=bmq_cols)
 
 # Drop columns MARS except MARS_TOTAL
 mars_cols = [
@@ -247,7 +249,7 @@ mars_cols = [
     if col.startswith('MARS') and col != 'MARS_TOTAL'
 ]
 
-final_data = final_data.drop(columns=mars_cols)
+#final_data = final_data.drop(columns=mars_cols)
 
 #Data cleaning
 final_data["FHIST_PLI"].replace(9.0, 0.0, inplace = True)
@@ -279,7 +281,7 @@ final_data = final_data.merge(
     on='participant_id', 
     how = "left"
 )
-assert final_data.shape == (168, 145)
+assert final_data.shape == (168, 173)
 
 
 
@@ -350,7 +352,7 @@ final_data = final_data.merge(
     on='participant_id', 
     how = "inner"
 )
-assert final_data.shape == (168, 158)
+assert final_data.shape == (168, 186)
 
 
 
@@ -411,7 +413,7 @@ final_data = pd.merge(
     on='participant_id', 
     how='inner'
 )
-assert final_data.shape == (138, 154)  #30 individuals have no value for the response variable.
+assert final_data.shape == (138, 182)  #30 individuals have no value for the response variable.
 
 final_data= final_data.replace('ND',np.nan) #Replace 'ND' values with NaN as they represent missing data
 final_data[["MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI"]] = (
@@ -455,6 +457,7 @@ sns.lineplot(df)
 plt.ylabel("Features remaining")
 plt.xlabel('Ratio of NAs (threshold)')
 plt.legend('')
+#plt.savefig('pourcentage des missing value par colonnes')
 plt.grid()
 
 #Choosing a threshold for missing values 
@@ -463,7 +466,7 @@ cols_to_drop = final_data.columns[final_data.apply(lambda x: x.isna().mean(), ax
 df_final = final_data.drop(cols_to_drop, axis = 1)
 df_final.info()
 
-assert df_final.shape == (138, 124) 
+assert df_final.shape == (138, 152) 
 
 
 ###Missing_per row
@@ -478,6 +481,7 @@ plt.title('Distribution of Missing Values per Row')
 plt.xlabel('Missing Rate (Percentage)')
 plt.ylabel('Number of Rows')
 plt.legend()
+# plt.savefig('distribution des valeurs manquantes par ligne')
 plt.show()
 
 # the maximum is 48.34% -> Keep all observations
@@ -486,28 +490,11 @@ plt.show()
 
 statistic_df= df_final
 
-'''
-#test the correlation before impotation
 
-def high_correlation_pairs(X, threshold=0.8):
-    corr_matrix = X.corr(method="spearman")
-    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-    
-    high_corr = (
-        upper.stack()
-        .reset_index()
-        .rename(columns={"level_0": "var1", "level_1": "var2", 0: "correlation"})
-    )
-    high_corr = high_corr[high_corr["correlation"].abs() > threshold]
-    high_corr = high_corr.sort_values("correlation", ascending=False).reset_index(drop=True)
-    
-    return high_corr
-df_final=df_final.drop("participant_id",axis=1)
-pairs = high_correlation_pairs(df_final, threshold=0.85)
-print(f"{len(pairs)} paires avec |r| > 0.85\n")
-print(pairs.to_string())
 
-'''
+
+
+
 
 ### Imputation
 
@@ -519,6 +506,8 @@ binary_cols = [
     "WHOA1B_PLI", "WHOA1C_PLI", "WHOA1D_PLI","SSRS6_PRELI",
     "WHOA1E_PLI", "WHOA1F_PLI", "WHOA1G_PLI","PHCMBY_PLI-ComorbiditeSomatique","WHOA1H_PLI",
     "BMI_M00", "DensityHospit", "SuicideAttempts(Yes/No)","TRQ2_PRELI",
+    "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI", "MARS6_PRELI",
+      "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI", "MARS10_PRELI",
 ]
 
 continuous_cols = [
@@ -542,29 +531,32 @@ continuous_cols = [
 
 
 ordinal_cols = [
-    "DBP_PRELI",          # stades 1-7
-    "SCHOOL_PRELI",       # niveau scolaire 1-8
-    "OUTW1_PLI",          # résultat période 1
-    "NBS1_PLI",           # nb épisodes sévères 1
-    "MC1_PLI",            # comorbidité médicale 1
-    "HYPOE2_PLI",         # 0-3
-    "OUTW2_PLI",          # résultat période 2
-    "NBS2_PLI",           # nb épisodes sévères 2
-    "MARS_TOTAL",         # 1-5
-    "TRQ5_PRELI",         # 1-3
-    "TRQ7_PRELI",         # 1-5
+    "DBP_PRELI",          
+    "SCHOOL_PRELI",       
+    "OUTW1_PLI",    
+    "NBS1_PLI",       
+    "MC1_PLI",           
+    "HYPOE2_PLI",       
+    "OUTW2_PLI", 
+    "NBS2_PLI",        
+    "MARS_TOTAL",         
+    "TRQ5_PRELI",         
+    "TRQ7_PRELI",         
     "TRQ4_PRELI",
     "TRQ6_PRELI",
+    "BMQ1_PRELI", "BMQ2_PRELI", "BMQ3_PRELI", "BMQ4_PRELI", "BMQ5_PRELI", "BMQ6_PRELI", 
+    "BMQ7_PRELI", "BMQ8_PRELI", "BMQ9_PRELI", "BMQ10_PRELI", "BMQ11_PRELI", 
+    "BMQ12_PRELI", "BMQ13_PRELI", "BMQ14_PRELI", "BMQ15_PRELI", "BMQ16_PRELI", "BMQ17_PRELI", "BMQ18_PRELI",
 ]
 
 
 nominal_cols = [
-    "TYPEP_PRELI",      # type de trouble
-    "RELSTAT_PRELI",    # statut relationnel
-    "ETHNICITY_PRELI",  # ethnicité
-    "CORG_PRELI",       # organisation des soins
-    "LIVSIT_PRELI",     # situation de vie
-    "RESIDENCE_PRELI",  # type de résidence
+    "TYPEP_PRELI",    
+    "RELSTAT_PRELI", 
+    "ETHNICITY_PRELI", 
+    "CORG_PRELI",       
+    "LIVSIT_PRELI",     
+    "RESIDENCE_PRELI",
 ]
 
 
@@ -653,7 +645,6 @@ X = df_final.drop(columns=["Lithium Response (4 levels)", "participant_id"])
 
 
 
-# final_data_dummy = pd.get_dummies(X_imputed_)
 
 # Convertir toutes les colonnes object en float
 X[X.select_dtypes(include='object').columns] = (
@@ -666,7 +657,7 @@ print(X.dtypes.value_counts())
 
 ### Correlation matrix
 
-corr_matrix = X.corr()
+corr_matrix = X.corr(method="spearman")
 
 plt.figure(figsize=(20, 16))
 sns.heatmap(
@@ -681,46 +672,136 @@ sns.heatmap(
 )
 plt.title("Matrice de corrélation", fontsize=14)
 plt.tight_layout()
+# plt.savefig('Matrice de correlation')
 plt.show()
 
 
-def high_correlation_pairs(X, threshold=0.8):
-    corr_matrix = X.corr(method="spearman")
-    upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-    
-    high_corr = (
-        upper.stack()
-        .reset_index()
-        .rename(columns={"level_0": "var1", "level_1": "var2", 0: "correlation"})
+
+
+# Seuil de corrélation
+threshold = 0.85
+
+# Extraction des fortes corrélations
+strong_corr = (
+    corr_matrix.where(
+        np.triu(np.ones(corr_matrix.shape), k=1).astype(bool)
     )
-    high_corr = high_corr[high_corr["correlation"].abs() > threshold]
-    high_corr = high_corr.sort_values("correlation", ascending=False).reset_index(drop=True)
-    
-    return high_corr
+    .stack()
+    .reset_index()
+)
 
-pairs = high_correlation_pairs(X, threshold=0.85)
-print(f"{len(pairs)} paires avec |r| > 0.85\n")
-print(pairs.to_string())
+# Renommer les colonnes
+strong_corr.columns = ['Variable_1', 'Variable_2', 'Correlation']
 
-remaining_to_remove = [
-    "NBS2_PLI",        # = SuicideAttempts(Yes/No) (r=0.99)     (Number of suicide attempts - SuicideAttempts(Yes/No) )
-    "MDRD_PRELI",      # = CKDEPI_PRELI (r=0.95)                (CKDEPI_PRELI - MDRD_PRELI)
-    "WHOA1A_PLI",      # = SmokingStatus-WHOA1A_PLI (r=0.94)    (Tobacco products (cigarettes, chewing tobacco, cigars, etc.) - SmokingStatus )
-    "NBH1_PLI",        # = TDH1_PLI (r=0.88)                    (Number of hospitalizations - Total duration of hospitalizations )
-    "AD2_PLI",         # = AD1_PLI (r=0.87)                     (Anxity disorders in the last in the life time - 2 yrs )
-    "MDE2_PLI",        # = NumberPreviousEpisodes (r=0.85)      (Major Depressive episodes - NumberPreviousEpisodes)
+# Filtrer selon le seuil
+strong_corr = strong_corr[
+    strong_corr['Correlation'].abs() > threshold
 ]
 
+# Trier par corrélation absolue décroissante
+strong_corr = strong_corr.reindex(
+    strong_corr['Correlation'].abs().sort_values(ascending=False).index
+)
 
-remaining_to_remove = [c for c in remaining_to_remove if c in X.columns]
+# Affichage
+print(strong_corr)
 
-X_clean = X.drop(columns=remaining_to_remove)
 
-print(f"{X.shape[1]} colonnes → {X_clean.shape[1]} colonnes conservées")
+# The most correlated variables with each other
+# Variable_1                                              Variable_2                                         Correlation
+# NBS2_PLI                                               SuicideAttempts(Yes/No)                             0.991790
+# Glomerular filtration rate (EGFR) MDRD (MDRD_PRELI)   Glomerular filtration rate (EGFR) (CKDEPI_PRELI)     0.952948
+# NBH1_PLI                                               TDH1_PLI                                            0.894335
+# MDE2_PLI                                               NumberPreviousEpisodes                              0.885562
+# TRQ4_PRELI                                             TRQ5_PRELI                                          0.871946
+# AD1_PLI                                                AD2_PLI                                             0.870392
+# NbHospitalizationsLifetime                             DensityHospit                                       0.862817
+# HYPOE1_PLI                                             HYPOETD1_PLI                                        0.859697
+# Weight (WEIGHT_PRELI)                                  BMI_M00                                             0.851385
 
-pairs_final = high_correlation_pairs(X_clean, threshold=0.85)
-print(f"\nPaires restantes avec |r| > 0.85 : {len(pairs_final)}")
-print(pairs_final.to_string())
+## Correlation of BMQ, MARS and TRQ
+#  Sélection des variables 
+bmq_cols  = [c for c in X.columns if 'BMQ'  in str(c)]
+mars_cols = [c for c in X.columns if 'MARS' in str(c)]
+trq_cols  = [c for c in X.columns if 'TRQ'  in str(c)]
+
+print("BMQ  :", bmq_cols)
+print("MARS :", mars_cols)
+print("TRQ  :", trq_cols)
+
+#  Matrices de corrélation 
+corr_bmq  = X[bmq_cols].corr(method="spearman")
+corr_mars = X[mars_cols].corr(method="spearman")
+corr_trq  = X[trq_cols].corr(method="spearman")
+
+#  Visualisation 
+fig, axes = plt.subplots(1, 3, figsize=(24, 7))
+
+# --- BMQ ---
+sns.heatmap(corr_bmq,
+            ax=axes[0],
+            annot=False,
+            fmt=".2f",
+            cmap="coolwarm",
+            center=0,
+            vmin=-1,
+            vmax=1,
+            linewidths=0.4,
+            square=True,
+            cbar_kws={"shrink": 0.8})
+
+axes[0].set_title("Corrélation Items BMQ",
+                  fontsize=13,
+                  fontweight="bold")
+axes[0].tick_params(axis="x", rotation=45, labelsize=8)
+axes[0].tick_params(axis="y", rotation=0, labelsize=8)
+
+# --- MARS ---
+sns.heatmap(corr_mars,
+            ax=axes[1],
+            annot=False,
+            fmt=".2f",
+            cmap="coolwarm",
+            center=0,
+            vmin=-1,
+            vmax=1,
+            linewidths=0.4,
+            square=True,
+            cbar_kws={"shrink": 0.8})
+
+axes[1].set_title("Corrélation Items MARS",
+                  fontsize=13,
+                  fontweight="bold")
+axes[1].tick_params(axis="x", rotation=45, labelsize=8)
+axes[1].tick_params(axis="y", rotation=0, labelsize=8)
+
+# --- TRQ ---
+sns.heatmap(corr_trq,
+            ax=axes[2],
+            annot=False,
+            fmt=".2f",
+            cmap="coolwarm",
+            center=0,
+            vmin=-1,
+            vmax=1,
+            linewidths=0.4,
+            square=True,
+            cbar_kws={"shrink": 0.8})
+
+axes[2].set_title("Corrélation Items TRQ",
+                  fontsize=13,
+                  fontweight="bold")
+axes[2].tick_params(axis="x", rotation=45, labelsize=8)
+axes[2].tick_params(axis="y", rotation=0, labelsize=8)
+
+plt.tight_layout()
+
+# plt.savefig("corr_bmq_mars_trq.png",dpi=150,bbox_inches="tight")
+
+plt.show()
+
+
+
 
 ### Multicolinerarity assessment: Matrix and VIF 
 
@@ -731,17 +812,17 @@ def compute_vif(X):
     vif["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
     return vif.sort_values("VIF", ascending=False).reset_index(drop=True)
 
-vif_df = compute_vif(X_clean)
+vif_df = compute_vif(X)
 print(vif_df)
 
 
+# The VIF results contain infinite values, which confirms the presence of multicollinearity,
+# therefore we will apply regularization methods to handle it in the models
 
 
 # %% 3. Save to excel file
 #
-#table.to_excel(OUTPUT + "data_demoSmokLiMarsResponse_python.xlsx", index=False)
-#table.to_excel(OUTPUT + "Clinical_data.xlsx", index=False)
-#table.to_csv(OUTPUT + "rlink-predict-response-clinic_v-20260430", index=False)
+statistic_df.to_excel(OUTPUT + "statistic_data.xlsx", index=False)
 '''
 df_ = df_final.select_dtypes(exclude = "datetime")
 df_.drop(["DATBIO_PRELI"], axis = 1, inplace = True)
@@ -750,3 +831,4 @@ df_.drop(["DATBIO_PRELI"], axis = 1, inplace = True)
 df_.to_csv(OUTPUT + 'CLINICAL_DATA.csv')
 df_
 '''
+# %%
