@@ -49,8 +49,7 @@ inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv
 # Baseline
 baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
 
-
-
+visits = pd.read_csv(INPUT +"dataset-clinical_mod-visits_form-visit_version-3.tsv", sep="\t", na_values=['ND'])
 
 # %%  EXEMPLE: Read and manipulate data
 # =====================================
@@ -157,6 +156,133 @@ baseline_df = baseline_df[VARS_TO_INCLUDE_PRELI + VARS_TO_INCLUDE_QUESTIONNAIRES
 assert baseline_df.shape == (168, 162)
 
 
+# Filtering to M03 visit only
+m03_data = visits[visits["VISCODE"] == "M3"]
+
+VARS_M03 = [
+    "participant_id",
+    # Physical exam
+    "WEIGHT",       # WEIGHT_PRELI ✓
+    "WAIST",        # WAIST_PRELI ✓
+    "SBP",          # SBP_PRELI ✓
+    "DBP",          # DBP_PRELI ✓
+
+    # Biological - bilan rénal (bio1)
+    "K",            # K_PRELI ✓
+    "CL",           # CL_PRELI ✓
+    "CA",           # CA_PRELI ✓
+    "PROTEINS",     # PROTEINS_PRELI ✓
+    "UREA",         # UREA_PRELI ✓
+    "CREAT",        # CREAT_PRELI ✓
+    "EGFR",         # EGFR_PRELI ✓
+    "MDRD",         # MDRD_PRELI ✓
+    "CKDEPI",       # CKDEPI_PRELI ✓
+    "TSH",          # TSH_PRELI ✓
+    "T3",           # T3_PRELI ✓
+    "T4",           # T4_PRELI ✓
+
+    # Biological - bilan lipidique/NFS (bio2)
+    "NA2",          # NA_PRELI ✓
+    "GLY2",         # GLY_PRELI ✓
+    "TGC2",         # TGC_PRELI ✓
+    "HDL2",         # HDL_PRELI ✓
+    "LDL2",         # LDL_PRELI ✓
+    "BHCG2",        # BHCG_PRELI ✓
+    "WBC2",         # WBC_PRELI ✓
+    "HB2",          # HB_PRELI ✓
+    "HT2",          # HT_PRELI ✓
+    "PLT2",         # PLT_PRELI ✓
+    "NP2",          # NP_PRELI ✓
+    "EOS2",         # EOS_PRELI ✓
+    "LYMPH2",       # LYMPH_PRELI ✓
+    "MONO2",        # MONO_PRELI ✓
+
+    # Medication
+    "CURRMED",      # CURRMED_PRELI ✓
+
+    # Social
+    "RELSTAT",      # RELSTAT_PRELI ✓
+    "ETHNICITY",    # ETHNICITY_PRELI ✓
+    "CORG",         # CORG_PRELI ✓
+    "LIVSIT",       # LIVSIT_PRELI ✓
+    "RESIDENCE",    # RESIDENCE_PRELI ✓
+    "SCHOOL",       # SCHOOL_PRELI ✓
+    "JOB",          # JOB_PRELI ✓
+    "EVNT",         # EVNT_PRELI ✓
+    "PHCMBY",       # PHCMBY_PLI ✓
+
+    # Episode history
+    "MDE2",         # MDE2_PLI ✓
+    "MDEH2",        # MDEH2_PLI ✓
+    "MDEPS2",       # MDEPS2_PLI ✓
+    "MDEMC2",       # MDEMC2_PLI ✓
+    "HYPOE2",       # HYPOE2_PLI ✓
+    "HYPOEH2",      # HYPOEH2_PLI ✓
+    "HYPOEMC2",     # HYPOEMC2_PLI ✓
+    "MANE2",        # MANE2_PLI ✓
+    "MANEH2",       # MANEH2_PLI ✓
+    "MANEPS2",      # MANEPS2_PLI ✓
+    "MANEMC2",      # MANEMC2_PLI ✓
+    "NBH2",         # NBH2_PLI ✓
+    "TDH2",         # TDH2_PLI ✓
+    "RCY2",         # RCY2_PLI ✓
+    "AGESTBD2",     # AGESTBD2_PLI ✓
+
+    # Questionnaires - Suicide (SSRS)
+    "SSRS1", "SSRS2", "SSRS3", "SSRS4", "SSRS5", "SSRS6", "SSRS6Y",  # SSRS*_PRELI ✓
+
+    # Questionnaires - BPRS
+    "BPRSTSC",      # BPRSTSC_PRELI ✓
+
+    # Questionnaires - Medication adherence
+    "MARS1V", "MARS2V", "MARS3V", "MARS4V", "MARS5V",
+    "MARS6V", "MARS7V", "MARS8V", "MARS9V", "MARS10V",  # MARS*_PRELI ✓
+    "TRQ", "TRQ1", "TRQ2", "TRQ3", "TRQ4", "TRQ5", "TRQ6", "TRQ7",  # TRQ*_PRELI ✓
+    "BMQ1", "BMQ2", "BMQ3", "BMQ4", "BMQ5", "BMQ6", "BMQ7", "BMQ8", "BMQ9",
+    "BMQ10", "BMQ11", "BMQ12", "BMQ13", "BMQ14", "BMQ15", "BMQ16", "BMQ17", "BMQ18",  # BMQ*_PRELI ✓
+
+    # Questionnaires - WHOA
+    "WHOA1A", "WHOA1B", "WHOA1C", "WHOA1D", "WHOA1E", "WHOA1F", "WHOA1G", "WHOA1H",  # WHOA1*_PLI ✓
+]
+
+
+
+m03_data = m03_data[VARS_M03]
+
+
+
+m03_data = m03_data[VARS_M03]
+
+# Ajouter le suffixe _M03 à toutes les colonnes sauf participant_id
+m03_data = m03_data.rename(
+    columns={
+        col: f"{col}_M03"
+        for col in m03_data.columns
+        if col != "participant_id"
+    }
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## All other relevant variables from base dataframe
@@ -218,7 +344,7 @@ plt.title("Response status at end of follow up (Binary output)")
 plt.show()
 
 
-# %% 2. Merge tables using "participant_id" (used by default)
+# %% 2. Merge tables using "participant_id" 
 # ===========================================
 
 final_data = pd.merge(inclusion_df, 
@@ -292,6 +418,20 @@ final_data['fhist_repli'].fillna(0, inplace = True)
 final_data.shape
 
 
+
+# Merge the m03_data with final_data
+
+
+final_data = pd.merge(
+    final_data,
+    m03_data,
+    on='participant_id',
+    how='left'
+)
+
+assert final_data.shape == (168, 280)
+
+
 # %% 2. merge with supplementary data supp_df
 # ===========================================
 Variables_supp=['participant_id', 'AGE', 'SEX', 
@@ -307,10 +447,10 @@ Variables_supp=['participant_id', 'AGE', 'SEX',
        'DensityHospit', 'SmokingStatus-WHOA1A_PLI', 'SuicideAttempts(Yes/No)',
        'QIDS_TotalScore_M00', 'QIDS_W1_M03', 'BRMS_TotalScore_M00',
        'BRMS_W1_M03', 'DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP',
-       'DeltaBZD']
+       'DeltaBZD','DeltaBMI','Delta_BMI_impute','DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP','DeltaBZD', 
+        'QIDS_W1_M03','BMI_M03','BRMS_W1_M03', ]
+
 Variables_to_drop = ['AGE', 'SEX', #variables_in_inclusion
-                     'DeltaBMI','Delta_BMI_impute','DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP','DeltaBZD', #M03_in_Delta
-                     'QIDS_W1_M03','BMI_M03','BRMS_W1_M03', #M03
                      'CTGY-CategorieComorbiditeSomatique_n°1','CTGY-CategorieComorbiditeSomatique_n°2etplus',
                      'DISEASE-PathologieComorbiditeSomatique_n°1','DISEASE-PathologieComorbiditeSomatique_n°2etplus','DISRDR-Trouble_n°1',
                      'DISRDR-Trouble_n°2etplus' # columns are not useful for our study
@@ -352,7 +492,7 @@ final_data = final_data.merge(
     on='participant_id', 
     how = "inner"
 )
-assert final_data.shape == (168, 186)
+assert final_data.shape == (168, 303)
 
 
 
@@ -413,7 +553,7 @@ final_data = pd.merge(
     on='participant_id', 
     how='inner'
 )
-assert final_data.shape == (138, 182)  #30 individuals have no value for the response variable.
+assert final_data.shape == (138, 299)  #30 individuals have no value for the response variable.
 
 final_data= final_data.replace('ND',np.nan) #Replace 'ND' values with NaN as they represent missing data
 final_data[["MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI"]] = (
@@ -466,7 +606,7 @@ cols_to_drop = final_data.columns[final_data.apply(lambda x: x.isna().mean(), ax
 df_final = final_data.drop(cols_to_drop, axis = 1)
 df_final.info()
 
-assert df_final.shape == (138, 152) 
+assert df_final.shape == (138, 210) 
 
 
 ###Missing_per row
@@ -484,17 +624,16 @@ plt.legend()
 # plt.savefig('distribution des valeurs manquantes par ligne')
 plt.show()
 
-# the maximum is 48.34% -> Keep all observations
+# the maximum is 37.14% -> Keep all observations
 
 
-
-statistic_df= df_final
-
-
+statistic_df = df_final.copy()
 
 
 
 
+
+'''
 
 ### Imputation
 
@@ -578,6 +717,9 @@ df_final[ordinal_cols] = mode_imputer.fit_transform(df_final[ordinal_cols])
 print(df_final.isnull().sum().sum()) 
 
 
+'''
+
+
 
 
 # Rename columns
@@ -641,5 +783,12 @@ statistic_df = statistic_df.rename(columns = labels)
 #
 statistic_df.to_excel(OUTPUT + "statistic_data.xlsx", index=False)  # Rlink clinical baseline data (M00) without imputation
 df_final.to_excel(OUTPUT + "Clinical_data_M00.xlsx", index=False)   # Rlink clinical baseline data (M00) with imputation
+
+
+# enregistrer une base de donnee M00M03 sans imputaion 
+# enregistrer une base de donnee M00M03 avec imputaion 
+# enregistrer une base de donnee M00 sans imputaion 
+# enregistrer une base de donnee M00 avec imputaion 
+
 
 # %%
