@@ -1,794 +1,695 @@
-# Read files
-import pandas as pd
+# R-LINK STUDY — Clinical Data Preparation Pipeline
+# Purpose : Merge, clean, and save the clinical dataset (baseline M00 + visit
+#           M03) used to predict lithium response in bipolar disorder.
+#
+# Input files (from R-Link eCRF repository):
+#   - dataset-clinical_mod-inclusion_version-3.tsv      → demographics
+#   - dataset-clinical_mod-baseline_version-3.tsv       → baseline clinical data (M00)
+#   - dataset-clinical_mod-visits_form-visit_version-3.tsv → follow-up visits
+#   - dataset-clinical_mod-baseline_form-preLi_tab-med_version-3.tsv → medications
+#   - dataset-clinical_mod-baseline_form-postLi_tab-famhist_version-3.tsv → family history
+#   - dataset-outcome_version-4.tsv                     → lithium response outcome
+#   - study-rlink_dataset-clinical_type-summary_version-20260220.xlsx → supplementary data (F. Bellivier, 2026)
+#
+# Output files (saved to ./data/)
+#
+#   - Rlink_version3_type_Clinic_timepoint_M00_v20260602.xlsx
+#       Clinical dataset containing baseline variables only (M00)
+#
+#   - Rlink_version3_type_Clinic_timepoint_M03_v20260602.xlsx
+#       Clinical dataset containing follow-up variables only (M03)
+#
+#   - Rlink_version3_type_Clinic_timepoint_M00_M03_v20260602.xlsx
+#       Combined clinical dataset containing both M00 and M03 variables
+#
+#
+# Authors  : Yassir CHAOUB
+# Date     : 2026
+
+
+# 0. IMPORTS
+
+import os
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import os
 from sklearn.preprocessing import LabelEncoder
 from sklearn.impute import SimpleImputer
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 
-# %% Set path to inout data and output results according to your local configuration
+# 1. CONFIGURATION — Paths
+# Adjust these paths to match your local or server setup.
 
-INPUT = "/neurospin/rlink/PUBLICATION/rlink-ecrf/"
-INPUT_SUPP = "/neurospin/signatures/2026_ychaoub_rlink_predict_response_clinic/data/study-rlink_dataset-clinical_type-summary_version-20260220.xlsx"
-#INPUT_SUPP = "./data/study-rlink_dataset-clinical_type-summary_version-20260220.xlsx"
-OUTPUT = './data/'
-
-
-
-# %%  Read and manipulate data
-# ============================
-
-# Supplemantary file provided by F. Bellivier in 2026
-supp_df = pd.read_excel(INPUT_SUPP)
-assert supp_df.shape == (169, 32)
-supp_df.columns = supp_df.iloc[0] #set the first row as the header
-supp_df = supp_df.drop(supp_df.index[0]) #remove the first row from the data
+INPUT_DIR   = "/neurospin/rlink/PUBLICATION/rlink-ecrf/"
+INPUT_SUPP  = "/neurospin/signatures/2026_ychaoub_rlink_predict_response_clinic/data/study-rlink_dataset-clinical_type-summary_version-20260220.xlsx"
+OUTPUT_DIR  = "./data/"
 
 
+# 2. VARIABLE LISTS
+# These lists define which columns are loaded from each source file.
+# Grouped by theme for readability.
 
+# --- 2.1 Baseline (M00) — clinical and psychiatric variables ---
 
-# %%  Select columns
-# ==================
-
-
-# %% 1. Selection from R-Link datasets
-# ====================================
-
-## Loading data from files in ecrf repo
-
-meds = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_form-preLi_tab-med_version-3.tsv", delimiter = "\t") # la variable UNIT est juste une unité  (page 14)
-fhist = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_form-postLi_tab-famhist_version-3.tsv", delimiter = "\t", na_values= "ND")
-
-# Inclusion file
-inclusion_df = pd.read_csv(INPUT + "dataset-clinical_mod-inclusion_version-3.tsv", sep='\t', na_values=['ND'])
-
-
-# Baseline
-baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
-
-visits = pd.read_csv(INPUT +"dataset-clinical_mod-visits_form-visit_version-3.tsv", sep="\t", na_values=['ND'])
-
-# %%  EXEMPLE: Read and manipulate data
-# =====================================
-
-# 1.1 Variables from file "dataset-clinical_mod-inclusion_version-3.tsv"
-
-vars =["participant_id", "CENTERNUM", "SEX", "AGE"] # SEX: 1 = Male, 2 = Female , 3 = Other
-inclusion_df = inclusion_df[vars]
-assert inclusion_df.shape == (168, 4)
-
-# 1.2 Variables from file "dataset-clinical_mod-baseline_version-3.tsv"
-#Selected
-
-
-VARS_TO_INCLUDE_PRELI = [
+BASELINE_VARS_CLINICAL = [
     "participant_id",
-    #Thymic state at inclusion
-    "MOODYN_PRELI", 
-    "TYPEP_PRELI",
-    "PS_PRELI",
-    "MIX_PRELI",
-    "DATSTEPD_PRELI",
-    "HOSP_PRELI", 
-   # "RSNINILI_PRELI", #NOT IN BASE
-   # "OTHRSNINILI_PRELI", #NOT IN BASE
-    #Physical preliminary exam
+    # Thymic state at inclusion
+    "MOODYN_PRELI",     # Current mood episode (yes/no)
+    "TYPEP_PRELI",      # Type of episode
+    "PS_PRELI",         # With psychotic symptoms
+    "MIX_PRELI",        # With mixed characteristics
+    "DATSTEPD_PRELI",   # Date step depression
+    "HOSP_PRELI",       # Currently hospitalized
+    # Physical examination
     "WEIGHT_PRELI",
     "HEIGHT_PRELI",
     "WAIST_PRELI",
-    "SBP_PRELI",
-    "DBP_PRELI",
-    # Relationship status, school, job, recent traumatic event
-    "RELSTAT_PRELI",
+    "SBP_PRELI",        # Systolic blood pressure
+    "DBP_PRELI",        # Diastolic blood pressure
+    # Sociodemographic
+    "RELSTAT_PRELI",    # Relationship status
     "ETHNICITY_PRELI",
-    "CORG_PRELI",
-    #"COUNTRY_PRELI", #NOT IN BASE
-    "LIVSIT_PRELI",
+    "CORG_PRELI",       # Country of origin
+    "LIVSIT_PRELI",     # Living situation
     "RESIDENCE_PRELI",
-    "SCHOOL_PRELI",
-    "JOB_PRELI",
-    "EVNT_PRELI",
-    # Medication history
-    "CURRMED_PRELI",
-    # Biological
-    "NA_PRELI",
-    "K_PRELI",
-    "CL_PRELI",
-    "CA_PRELI",
-    "PROTEINS_PRELI",
-    "UREA_PRELI",
-    "CREAT_PRELI",
-    "EGFR_PRELI",
-    "MDRD_PRELI",
-    "CKDEPI_PRELI",
-    "TSH_PRELI",
-    "T3_PRELI",
-    "T4_PRELI",
-    "GLY_PRELI",
-    "TGC_PRELI",
-    "HDL_PRELI",
-    "LDL_PRELI",
-    "BHCG_PRELI",
-    "WBC_PRELI",
-    "HB_PRELI",
-    "HT_PRELI",
-    "PLT_PRELI",
-    "NP_PRELI",
-    "EOS_PRELI",
-    "LYMPH_PRELI",
-    "MONO_PRELI",
-    "FHIST_PLI", "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI", "PHCMBY_PLI",
-    "RCY1_PLI", "MDE1_PLI", "MDEH1_PLI", "MDEPS1_PLI", "MDEMC1_PLI", "MDETD1_PLI", 'HYPOE1_PLI', 'HYPOEH1_PLI', 'HYPOEMC1_PLI', 'HYPOETD1_PLI',
-    'MANE1_PLI', 'MANEH1_PLI', 'MANEPS1_PLI', 'MANEMC1_PLI', 'MANETD1_PLI', 
-    #"PATSEQ1_PLI", 
-    "NBH1_PLI", 
-    #"PATSEQM1_PLI", 
-    "TDH1_PLI", "OUTW1_PLI", "NBS1_PLI", 
-    "AD1_PLI", "SUD1_PLI", "MC1_PLI", "RCY2_PLI", "AGESTBD2_PLI", "BDNOW2_PLI", "AGENDBD2_PLI", 
-    'MDE2_PLI', 'MDEH2_PLI', 'MDEPS2_PLI', 'MDEMC2_PLI', 'MDETD2_PLI', 'AGEMDE2_PLI', 'HYPOE2_PLI', 'HYPOEH2_PLI', 'HYPOEMC2_PLI', 
-    'HYPOETD2_PLI', 'AGEHYPOE2_PLI', 'MANE2_PLI', 'MANEH2_PLI', 'MANEPS2_PLI', 'MANEMC2_PLI', 'MANETD2_PLI', 'AGEMANE2_PLI', 'PATSEQM2_PLI', 'NBH2_PLI', 'TDH2_PLI', 
-    'AGESTBH2_PLI', 'OUTW2_PLI', 'NBS2_PLI', 'AGES2_PLI', 'AD2_PLI', 'SUD2_PLI', 'MC2_PLI',
+    "SCHOOL_PRELI",     # Highest educational qualification
+    "JOB_PRELI",        # Employment status
+    "EVNT_PRELI",       # Recent stressful life event (<12 months)
+    # Current treatment
+    "CURRMED_PRELI",    # Current medications (yes/no)
+    # Biology — renal / metabolic panel
+    "NA_PRELI", "K_PRELI", "CL_PRELI", "CA_PRELI",
+    "PROTEINS_PRELI", "UREA_PRELI", "CREAT_PRELI",
+    "EGFR_PRELI", "MDRD_PRELI", "CKDEPI_PRELI",
+    # Biology — thyroid
+    "TSH_PRELI", "T3_PRELI", "T4_PRELI",
+    # Biology — lipid / glycemic panel
+    "GLY_PRELI", "TGC_PRELI", "HDL_PRELI", "LDL_PRELI",
+    # Biology — haematology
+    "BHCG_PRELI", "WBC_PRELI", "HB_PRELI", "HT_PRELI", "PLT_PRELI",
+    "NP_PRELI", "EOS_PRELI", "LYMPH_PRELI", "MONO_PRELI",
+    # Psychiatric and treatment history (Post-Lithium Interview = PLI)
+    "FHIST_PLI", "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI",
+    "BENZOS_PLI", "PHCMBY_PLI",
+    # Episode history — period 1 (2 years before inclusion)
+    "RCY1_PLI",                                                 # Rapid cycling
+    "MDE1_PLI", "MDEH1_PLI", "MDEPS1_PLI", "MDEMC1_PLI", "MDETD1_PLI",  # MDE
+    "HYPOE1_PLI", "HYPOEH1_PLI", "HYPOEMC1_PLI", "HYPOETD1_PLI",         # Hypomanic
+    "MANE1_PLI", "MANEH1_PLI", "MANEPS1_PLI", "MANEMC1_PLI", "MANETD1_PLI",  # Manic
+    "NBH1_PLI", "TDH1_PLI", "OUTW1_PLI", "NBS1_PLI",
+    "AD1_PLI", "SUD1_PLI", "MC1_PLI",
+    # Episode history — lifetime (period 2)
+    "RCY2_PLI", "AGESTBD2_PLI", "BDNOW2_PLI", "AGENDBD2_PLI",
+    "MDE2_PLI", "MDEH2_PLI", "MDEPS2_PLI", "MDEMC2_PLI", "MDETD2_PLI",
+    "AGEMDE2_PLI", "HYPOE2_PLI", "HYPOEH2_PLI", "HYPOEMC2_PLI",
+    "HYPOETD2_PLI", "AGEHYPOE2_PLI",
+    "MANE2_PLI", "MANEH2_PLI", "MANEPS2_PLI", "MANEMC2_PLI", "MANETD2_PLI",
+    "AGEMANE2_PLI", "PATSEQM2_PLI", "NBH2_PLI", "TDH2_PLI",
+    "AGESTBH2_PLI", "OUTW2_PLI", "NBS2_PLI", "AGES2_PLI",
+    "AD2_PLI", "SUD2_PLI", "MC2_PLI",
 ]
 
-VARS_TO_INCLUDE_QUESTIONNAIRES = [
-    #DEPRESSION - QIDS 
-    "QIDSTSC_PRELI", #total score
-    "BRMSTSC_PRELI", #total score
-    #suicide risk
-    "SSRS1_PRELI", "SSRS2_PRELI", "SSRS3_PRELI", "SSRS4_PRELI", "SSRS5_PRELI", "SSRS6_PRELI", "SSRS6Y_PRELI",
-    #BPRS - Psychiatric symptom severity
-    "BPRSTSC_PRELI",
-    #Medication adherence: MARS, TRQ, BMQ
-    "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI", "MARS6_PRELI", "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI", "MARS10_PRELI",
-    "TRQ_PRELI", "TRQ1_PRELI", "TRQ2_PRELI", 
-    #"TRQ3_PRELI", 
-    "TRQ4_PRELI", "TRQ5_PRELI", "TRQ6_PRELI", "TRQ7_PRELI", "TRQ1B_PRELI", "TRQ2B_PRELI",
-    "BMQ1_PRELI", "BMQ2_PRELI", "BMQ3_PRELI", "BMQ4_PRELI", "BMQ5_PRELI", "BMQ6_PRELI", "BMQ7_PRELI", "BMQ8_PRELI", "BMQ9_PRELI", "BMQ10_PRELI", "BMQ11_PRELI", 
-    "BMQ12_PRELI", "BMQ13_PRELI", "BMQ14_PRELI", "BMQ15_PRELI", "BMQ16_PRELI", "BMQ17_PRELI", "BMQ18_PRELI",
-    'WHOA1A_PLI', 'WHOA1B_PLI', 'WHOA1C_PLI', 'WHOA1D_PLI', 'WHOA1E_PLI', 'WHOA1F_PLI', 'WHOA1G_PLI', 'WHOA1H_PLI'
+BASELINE_VARS_QUESTIONNAIRES = [
+    # Depression severity
+    "QIDSTSC_PRELI",    # QIDS total score
+    "BRMSTSC_PRELI",    # BRMS (Bech-Rafaelsen Mania Scale) total score
+    # Suicide risk (Columbia SSRS)
+    "SSRS1_PRELI", "SSRS2_PRELI", "SSRS3_PRELI", "SSRS4_PRELI",
+    "SSRS5_PRELI", "SSRS6_PRELI", "SSRS6Y_PRELI",
+    # General psychiatric symptom severity
+    "BPRSTSC_PRELI",    # BPRS total score
+    # Medication adherence — MARS (10-item)
+    "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI",
+    "MARS6_PRELI", "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI", "MARS10_PRELI",
+    # Medication adherence — TRQ
+    "TRQ_PRELI", "TRQ1_PRELI", "TRQ2_PRELI", "TRQ4_PRELI",
+    "TRQ5_PRELI", "TRQ6_PRELI", "TRQ7_PRELI", "TRQ1B_PRELI", "TRQ2B_PRELI",
+    # Beliefs about Medication Questionnaire — BMQ (18 items)
+    "BMQ1_PRELI",  "BMQ2_PRELI",  "BMQ3_PRELI",  "BMQ4_PRELI",  "BMQ5_PRELI",
+    "BMQ6_PRELI",  "BMQ7_PRELI",  "BMQ8_PRELI",  "BMQ9_PRELI",  "BMQ10_PRELI",
+    "BMQ11_PRELI", "BMQ12_PRELI", "BMQ13_PRELI", "BMQ14_PRELI", "BMQ15_PRELI",
+    "BMQ16_PRELI", "BMQ17_PRELI", "BMQ18_PRELI",
+    # Lifestyle (WHOA)
+    "WHOA1A_PLI", "WHOA1B_PLI", "WHOA1C_PLI", "WHOA1D_PLI",
+    "WHOA1E_PLI", "WHOA1F_PLI", "WHOA1G_PLI", "WHOA1H_PLI",
 ]
 
-baseline_df = pd.read_csv(INPUT + "dataset-clinical_mod-baseline_version-3.tsv", sep='\t', na_values=['ND'])
-baseline_df = baseline_df[VARS_TO_INCLUDE_PRELI + VARS_TO_INCLUDE_QUESTIONNAIRES ]
-assert baseline_df.shape == (168, 162)
+# --- 2.2 Visit M03 variables (3-month follow-up) ---
+# Column names differ from baseline; renamed later with suffix _M03.
 
-
-# Filtering to M03 visit only
-m03_data = visits[visits["VISCODE"] == "M3"]
-
-VARS_M03 = [
+VISIT_M03_VARS = [
     "participant_id",
-    # Physical exam
-    "WEIGHT",       # WEIGHT_PRELI ✓
-    "WAIST",        # WAIST_PRELI ✓
-    "SBP",          # SBP_PRELI ✓
-    "DBP",          # DBP_PRELI ✓
-
-    # Biological - bilan rénal (bio1)
-    "K",            # K_PRELI ✓
-    "CL",           # CL_PRELI ✓
-    "CA",           # CA_PRELI ✓
-    "PROTEINS",     # PROTEINS_PRELI ✓
-    "UREA",         # UREA_PRELI ✓
-    "CREAT",        # CREAT_PRELI ✓
-    "EGFR",         # EGFR_PRELI ✓
-    "MDRD",         # MDRD_PRELI ✓
-    "CKDEPI",       # CKDEPI_PRELI ✓
-    "TSH",          # TSH_PRELI ✓
-    "T3",           # T3_PRELI ✓
-    "T4",           # T4_PRELI ✓
-
-    # Biological - bilan lipidique/NFS (bio2)
-    "NA2",          # NA_PRELI ✓
-    "GLY2",         # GLY_PRELI ✓
-    "TGC2",         # TGC_PRELI ✓
-    "HDL2",         # HDL_PRELI ✓
-    "LDL2",         # LDL_PRELI ✓
-    "BHCG2",        # BHCG_PRELI ✓
-    "WBC2",         # WBC_PRELI ✓
-    "HB2",          # HB_PRELI ✓
-    "HT2",          # HT_PRELI ✓
-    "PLT2",         # PLT_PRELI ✓
-    "NP2",          # NP_PRELI ✓
-    "EOS2",         # EOS_PRELI ✓
-    "LYMPH2",       # LYMPH_PRELI ✓
-    "MONO2",        # MONO_PRELI ✓
-
-    # Medication
-    "CURRMED",      # CURRMED_PRELI ✓
-
-    # Social
-    "RELSTAT",      # RELSTAT_PRELI ✓
-    "ETHNICITY",    # ETHNICITY_PRELI ✓
-    "CORG",         # CORG_PRELI ✓
-    "LIVSIT",       # LIVSIT_PRELI ✓
-    "RESIDENCE",    # RESIDENCE_PRELI ✓
-    "SCHOOL",       # SCHOOL_PRELI ✓
-    "JOB",          # JOB_PRELI ✓
-    "EVNT",         # EVNT_PRELI ✓
-    "PHCMBY",       # PHCMBY_PLI ✓
-
+    # Physical
+    "WEIGHT", "WAIST", "SBP", "DBP",
+    # Biology — renal panel
+    "K", "CL", "CA", "PROTEINS", "UREA", "CREAT", "EGFR", "MDRD", "CKDEPI",
+    # Biology — thyroid
+    "TSH", "T3", "T4",
+    # Biology — metabolic / haematology (suffixed with "2" in visits file)
+    "NA2", "GLY2", "TGC2", "HDL2", "LDL2", "BHCG2",
+    "WBC2", "HB2", "HT2", "PLT2", "NP2", "EOS2", "LYMPH2", "MONO2",
+    # Treatment and sociodemographic (repeated at M03)
+    "CURRMED", "RELSTAT", "ETHNICITY", "CORG", "LIVSIT",
+    "RESIDENCE", "SCHOOL", "JOB", "EVNT", "PHCMBY",
     # Episode history
-    "MDE2",         # MDE2_PLI ✓
-    "MDEH2",        # MDEH2_PLI ✓
-    "MDEPS2",       # MDEPS2_PLI ✓
-    "MDEMC2",       # MDEMC2_PLI ✓
-    "HYPOE2",       # HYPOE2_PLI ✓
-    "HYPOEH2",      # HYPOEH2_PLI ✓
-    "HYPOEMC2",     # HYPOEMC2_PLI ✓
-    "MANE2",        # MANE2_PLI ✓
-    "MANEH2",       # MANEH2_PLI ✓
-    "MANEPS2",      # MANEPS2_PLI ✓
-    "MANEMC2",      # MANEMC2_PLI ✓
-    "NBH2",         # NBH2_PLI ✓
-    "TDH2",         # TDH2_PLI ✓
-    "RCY2",         # RCY2_PLI ✓
-    "AGESTBD2",     # AGESTBD2_PLI ✓
-
-    # Questionnaires - Suicide (SSRS)
-    "SSRS1", "SSRS2", "SSRS3", "SSRS4", "SSRS5", "SSRS6", "SSRS6Y",  # SSRS*_PRELI ✓
-
-    # Questionnaires - BPRS
-    "BPRSTSC",      # BPRSTSC_PRELI ✓
-
-    # Questionnaires - Medication adherence
+    "MDE2", "MDEH2", "MDEPS2", "MDEMC2", "HYPOE2", "HYPOEH2", "HYPOEMC2",
+    "MANE2", "MANEH2", "MANEPS2", "MANEMC2",
+    "NBH2", "TDH2", "RCY2", "AGESTBD2",
+    # Suicide risk (SSRS)
+    "SSRS1", "SSRS2", "SSRS3", "SSRS4", "SSRS5", "SSRS6", "SSRS6Y",
+    # BPRS
+    "BPRSTSC",
+    # Medication adherence — MARS (suffixed with "V" at M03)
     "MARS1V", "MARS2V", "MARS3V", "MARS4V", "MARS5V",
-    "MARS6V", "MARS7V", "MARS8V", "MARS9V", "MARS10V",  # MARS*_PRELI ✓
-    "TRQ", "TRQ1", "TRQ2", "TRQ3", "TRQ4", "TRQ5", "TRQ6", "TRQ7",  # TRQ*_PRELI ✓
-    "BMQ1", "BMQ2", "BMQ3", "BMQ4", "BMQ5", "BMQ6", "BMQ7", "BMQ8", "BMQ9",
-    "BMQ10", "BMQ11", "BMQ12", "BMQ13", "BMQ14", "BMQ15", "BMQ16", "BMQ17", "BMQ18",  # BMQ*_PRELI ✓
-
-    # Questionnaires - WHOA
-    "WHOA1A", "WHOA1B", "WHOA1C", "WHOA1D", "WHOA1E", "WHOA1F", "WHOA1G", "WHOA1H",  # WHOA1*_PLI ✓
+    "MARS6V", "MARS7V", "MARS8V", "MARS9V", "MARS10V",
+    # TRQ
+    "TRQ", "TRQ1", "TRQ2", "TRQ3", "TRQ4", "TRQ5", "TRQ6", "TRQ7",
+    # BMQ
+    "BMQ1",  "BMQ2",  "BMQ3",  "BMQ4",  "BMQ5",  "BMQ6",  "BMQ7",  "BMQ8",
+    "BMQ9",  "BMQ10", "BMQ11", "BMQ12", "BMQ13", "BMQ14", "BMQ15", "BMQ16",
+    "BMQ17", "BMQ18",
+    # WHOA
+    "WHOA1A", "WHOA1B", "WHOA1C", "WHOA1D",
+    "WHOA1E", "WHOA1F", "WHOA1G", "WHOA1H",
 ]
 
+# --- 2.3 Supplementary file — variables to import ---
+# Source: F. Bellivier (2026). Duplicate columns (AGE, SEX) already in
+# inclusion file are excluded. Free-text disease category columns are also
+# excluded (not used in modelling).
 
-
-m03_data = m03_data[VARS_M03]
-
-
-
-m03_data = m03_data[VARS_M03]
-
-# Ajouter le suffixe _M03 à toutes les colonnes sauf participant_id
-m03_data = m03_data.rename(
-    columns={
-        col: f"{col}_M03"
-        for col in m03_data.columns
-        if col != "participant_id"
-    }
-)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## All other relevant variables from base dataframe
-
-# 1.4 Variables from file "dataset-clinical_version-2_outcome.tsv"
-
-vars = ["participant_id", "Response.Status.at.end.of.follow.up"]
-final_response = pd.read_csv(INPUT + "dataset-outcome_version-4.tsv", sep='\t')
-#final_response= outcome[vars]
-#df4.participant_id = ["sub-"+ str(id) for id in df4.participant_id]
-#assert final_response.shape == (168, 2)
-
-
-# Plotting response variable 
-
-sns.countplot(x = "Response.Status.at.end.of.follow.up", data = final_response)
-plt.ylabel("Absolute counts")
-plt.xlabel('Status')
-plt.title("Response status at end of follow up")
-plt.show()
-
-###Response variables 
-# column of population dataframe that defines response to Li label
-label = 'Response.Status.at.end.of.follow.up'
-
-print(final_response[label].unique())
-
-print("in population dataframe: \nnumber of Good Responders (GR) :",len(final_response[final_response[label]=="GR"].values))
-print("number of Partial Responders (PaR) :",len(final_response[final_response[label]=="PaR"].values))
-print("number of Non Responders (NR) :",len(final_response[final_response[label]=="NR"].values))
-print("number of UnClassified (UC) :",len(final_response[final_response[label]=="UC"].values))
-
-# we ignore the unclassified subjects, and keep only the good responders, partial responders, and non-responders
-labels_to_keep= ["GR","PaR","NR"]
-Response = final_response[final_response[label].isin(labels_to_keep)]
-Response = Response[["participant_id",label]]
-# keep the variable 'Response.Status.at.end.of.follow.up' as y (label / outcome) for classification
-Response = Response.rename(columns={label: "response"})
-Response.loc[((Response["response"] == "PaR") | (Response["response"] == "NR") | (Response["response"] == "UC") ), "response"] = "No_GR"
-
-assert set(Response['response'].unique()) == set(["No_GR","GR"])
-le = LabelEncoder()
-Response['response']=le.fit_transform(Response['response']) # 0 -> GR , 1-> No_GR
-# Plotting response variable 
-
-sns.countplot(x = "Response.Status.at.end.of.follow.up", data = final_response)
-plt.ylabel("Absolute counts")
-plt.xlabel('Status')
-plt.title("Response status at end of follow up")
-#plt.savefig("Distribution de la variable Response avant le traitement")
-plt.show()
-# Plotting response variable 
-
-sns.countplot(x = "response", data = Response)
-plt.ylabel("Absolute counts")
-plt.xlabel('Status')
-plt.title("Response status at end of follow up (Binary output)")
-#plt.savefig("Distribution de la variable Response apres le traitement")
-plt.show()
-
-
-# %% 2. Merge tables using "participant_id" 
-# ===========================================
-
-final_data = pd.merge(inclusion_df, 
-                      baseline_df,
-                      on='participant_id', 
-                      how='inner'
-)
-assert final_data.shape == (168, 165)
-
-
-
-### ADDING NEW VARIABLES ###
-final_data['BMQ_NECESSITY'] = final_data['BMQ1_PRELI'] + final_data['BMQ2_PRELI'] +final_data['BMQ3_PRELI']+final_data['BMQ4_PRELI']+final_data['BMQ5_PRELI']
-final_data['BMQ_PREOCCUPATION'] = final_data['BMQ6_PRELI'] + final_data['BMQ7_PRELI'] +final_data['BMQ8_PRELI']+final_data['BMQ9_PRELI']+final_data['BMQ10_PRELI']
-final_data['BMQ_DIFFERENTIAL'] = final_data['BMQ_NECESSITY'] - final_data['BMQ_PREOCCUPATION']
-final_data['BMQ_GENERAL'] = final_data['BMQ11_PRELI'] +final_data['BMQ12_PRELI']+final_data['BMQ13_PRELI']+final_data['BMQ14_PRELI']+final_data['BMQ15_PRELI']+final_data['BMQ16_PRELI']+final_data['BMQ17_PRELI']+final_data['BMQ18_PRELI']
-
-final_data['MARS_TOTAL'] = np.sum(final_data[final_data.columns[final_data.columns.str.startswith('MARS')]], axis = 1)
-
-
-# Drop columns BMQ1 - BMQ18
-bmq_cols = [f'BMQ{i}_PRELI' for i in range(1, 19)]
-#final_data = final_data.drop(columns=bmq_cols)
-
-# Drop columns MARS except MARS_TOTAL
-mars_cols = [
-    col for col in final_data.columns
-    if col.startswith('MARS') and col != 'MARS_TOTAL'
+SUPP_VARS_TO_KEEP_RAW = [
+    "participant_id",
+    "BMI_M00", "BMI_M03", "DeltaBMI", "Delta_BMI_impute",
+    "PHCMBY_PLI-ComorbiditeSomatique",
+    "PSYHLTH_PLI-ComorbiditePsychiatrique",
+    "AgeAtOnset", "NumberPreviousEpisodes", "DurationIllness",
+    "DensityEpisodes", "NbHospitalizationsLifetime", "DensityHospit",
+    "SmokingStatus-WHOA1A_PLI",
+    "SuicideAttempts(Yes/No)",
+    "QIDS_TotalScore_M00", "QIDS_W1_M03",
+    "BRMS_TotalScore_M00", "BRMS_W1_M03",
+    "DeltaAPA", "DeltaATD", "DeltaAC", "DeltaNLP", "DeltaBZD",
 ]
 
-#final_data = final_data.drop(columns=mars_cols)
+SUPP_VARS_TO_DROP = [
+    # Already in inclusion file → avoid duplicate columns after merge
+    "AGE", "SEX",
+    # Free-text disease category columns — not useful for modelling
+    "CTGY-CategorieComorbiditeSomatique_n°1",
+    "CTGY-CategorieComorbiditeSomatique_n°2etplus",
+    "DISEASE-PathologieComorbiditeSomatique_n°1",
+    "DISEASE-PathologieComorbiditeSomatique_n°2etplus",
+    "DISRDR-Trouble_n°1",
+    "DISRDR-Trouble_n°2etplus",
+]
 
-#Data cleaning
-final_data["FHIST_PLI"].replace(9.0, 0.0, inplace = True)
-
-fhist_ratio_h = fhist.groupby('participant_id')['SEX_FH'].apply(lambda x: (x == 1.0).mean())
-fhist_ratio_h.name = "fhist_ratio_h"
-fhist_repli = fhist.groupby('participant_id')['REPLI_FM'].apply(lambda x: (x == 1.0).mean())
-fhist_repli.name = "fhist_repli"
-fhist_repli.value_counts()
-
-### Counting relatives 
-fhist_count = fhist.groupby("participant_id").size().sort_values()
-fhist_count.name = "fhist_count"
-
-final_data = final_data.merge(
-    fhist_count, 
-    on='participant_id', 
-    how = "left"
-)
-
-final_data = final_data.merge(
-    fhist_ratio_h, 
-    on='participant_id', 
-    how = "left"
-)
-
-final_data = final_data.merge(
-    fhist_repli, 
-    on='participant_id', 
-    how = "left"
-)
-assert final_data.shape == (168, 173)
-
-
-
-final_data['fhist_count'].fillna(0, inplace = True)
-final_data['fhist_ratio_h'].fillna(0, inplace = True)
-final_data['fhist_repli'].fillna(0, inplace = True)
-
-final_data.shape
-
-
-
-# Merge the m03_data with final_data
-
-
-final_data = pd.merge(
-    final_data,
-    m03_data,
-    on='participant_id',
-    how='left'
-)
-
-assert final_data.shape == (168, 280)
-
-
-# %% 2. merge with supplementary data supp_df
-# ===========================================
-Variables_supp=['participant_id', 'AGE', 'SEX', 
-                'BMI_M00', 'BMI_M03', 'DeltaBMI',
-       'Delta_BMI_impute', 'PHCMBY_PLI-ComorbiditeSomatique',
-       'CTGY-CategorieComorbiditeSomatique_n°1',
-       'CTGY-CategorieComorbiditeSomatique_n°2etplus',
-       'DISEASE-PathologieComorbiditeSomatique_n°1',
-       'DISEASE-PathologieComorbiditeSomatique_n°2etplus',
-       'PSYHLTH_PLI-ComorbiditePsychiatrique', 'DISRDR-Trouble_n°1',
-       'DISRDR-Trouble_n°2etplus', 'AgeAtOnset', 'NumberPreviousEpisodes',
-       'DurationIllness', 'DensityEpisodes', 'NbHospitalizationsLifetime',
-       'DensityHospit', 'SmokingStatus-WHOA1A_PLI', 'SuicideAttempts(Yes/No)',
-       'QIDS_TotalScore_M00', 'QIDS_W1_M03', 'BRMS_TotalScore_M00',
-       'BRMS_W1_M03', 'DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP',
-       'DeltaBZD','DeltaBMI','Delta_BMI_impute','DeltaAPA', 'DeltaATD', 'DeltaAC', 'DeltaNLP','DeltaBZD', 
-        'QIDS_W1_M03','BMI_M03','BRMS_W1_M03', ]
-
-Variables_to_drop = ['AGE', 'SEX', #variables_in_inclusion
-                     'CTGY-CategorieComorbiditeSomatique_n°1','CTGY-CategorieComorbiditeSomatique_n°2etplus',
-                     'DISEASE-PathologieComorbiditeSomatique_n°1','DISEASE-PathologieComorbiditeSomatique_n°2etplus','DISRDR-Trouble_n°1',
-                     'DISRDR-Trouble_n°2etplus' # columns are not useful for our study
-
-                     ]
-Variables_supp_in_final_data=['PHCMBY_PLI-ComorbiditeSomatique','QIDS_TotalScore_M00'
-                              ,'BRMS_TotalScore_M00','NbHospitalizationsLifetime',
-                              'SmokingStatus-WHOA1A_PLI',
-                              ]
-
-
-## Differences between final_data and supp_df for AGE and SEX
-# Align by participant_id
-final_sorted = final_data.set_index("participant_id").sort_index()
-supp_sorted = supp_df.set_index("participant_id").sort_index()
-
-# Ensure same index order
-final_sorted, supp_sorted = final_sorted.align(supp_sorted)
-
-# Create mask safely
-mask = (
-    final_sorted["AGE"].ne(supp_sorted["AGE"]) |
-    final_sorted["SEX"].ne(supp_sorted["SEX"])
-)
-
-# Get real differing indices
-diff_indices = final_sorted.index[mask]
-
-print("Differences found:", mask.any())
-print("Differing participant_id:", diff_indices.tolist())
-
-# There are no differences between final_data and supp_df for AGE and SEX when aligned by participant_id
-
-
-
-variables_to_keep = list(set(Variables_supp) - set(Variables_to_drop))
-final_data = final_data.merge(
-    supp_df[variables_to_keep], 
-    on='participant_id', 
-    how = "inner"
-)
-assert final_data.shape == (168, 303)
-
-
-
-
-
-###Coreelation (Variables_supp_in_final_data and variables of final_data)###
-
-df_corr=final_data
-for column in Variables_supp_in_final_data :
-    df_corr[column]=pd.to_numeric(df_corr[column],errors='coerce')
-
-cols_num= df_corr.select_dtypes(include=['number']).columns
-
-corr_matrix = df_corr[cols_num].corr()
-cols_num=cols_num.drop('PHCMBY_PLI-ComorbiditeSomatique')
-cols_num=cols_num.drop('QIDS_TotalScore_M00')
-cols_num=cols_num.drop('BRMS_TotalScore_M00')
-cols_num=cols_num.drop('NbHospitalizationsLifetime')
-cols_num=cols_num.drop('SmokingStatus-WHOA1A_PLI')
-
-result = corr_matrix.loc[Variables_supp_in_final_data,cols_num]
-constent=0.9
-filtered_result=result[result.abs()>constent]
-high_corr_pairs= filtered_result.stack().reset_index()
-high_corr_pairs
-
-# So the variables in Variables_supp_in_final_data already in final_data:
-# PHCMBY_PLI-ComorbiditeSomatique = PHCMBY_PLI
-# QIDS_TotalScore_M00 = QIDSTSC_PRELI
-# BRMS_TotalScore_M00 = BRMSTSC_PRELI
-# NbHospitalizationsLifetim = NBH2_PLI
-# SmokingStatus-WHOA1A_PLI = WHOA1A_PLI
-
-rename_dict = {
-    'PHCMBY_PLI': 'PHCMBY_PLI-ComorbiditeSomatique',
-    'QIDSTSC_PRELI': 'QIDS_TotalScore_M00',
-    'BRMSTSC_PRELI': 'BRMS_TotalScore_M00',
-    'NBH2_PLI': 'NbHospitalizationsLifetime',
-    'WHOA1A_PLI': 'SmokingStatus-WHOA1A_PLI'
+# --- 2.4 Human-readable column labels (for final output) ---
+COLUMN_LABELS = {
+    "MOODYN_PRELI":   "Current mood episode",
+    "TYPEP_PRELI":    "Type of episode",
+    "PS_PRELI":       "With psychotic symptoms",
+    "MIX_PRELI":      "With mixed characteristics",
+    "HOSP_PRELI":     "Currently hospitalized",
+    "WEIGHT_PRELI":   "Weight (kg)",
+    "HEIGHT_PRELI":   "Height (cm)",
+    "SBP_PRELI":      "Systolic BP (mmHg)",
+    "DBP_PRELI":      "Diastolic BP (mmHg)",
+    "RELSTAT_PRELI":  "Relationship status",
+    "ETHNICITY_PRELI":"Ethnicity",
+    "CORG_PRELI":     "Country of origin",
+    "LIVSIT_PRELI":   "Living situation",
+    "RESIDENCE_PRELI":"Place of residence",
+    "SCHOOL_PRELI":   "Highest qualification",
+    "JOB_PRELI":      "Employment status",
+    "EVNT_PRELI":     "Recent stressful event (<12 months)",
+    "CURRMED_PRELI":  "Current medications",
+    "NA_PRELI":       "Sodium (mmol/L)",
+    "K_PRELI":        "Potassium (mmol/L)",
+    "CL_PRELI":       "Chloride (mmol/L)",
+    "CA_PRELI":       "Calcium (mmol/L)",
+    "PROTEINS_PRELI": "Proteins (g/L)",
+    "UREA_PRELI":     "Urea (mmol/L)",
+    "CREAT_PRELI":    "Creatinine (µmol/L)",
+    "EGFR_PRELI":     "eGFR — CKD-EPI (mL/min/1.73m²)",
+    "MDRD_PRELI":     "eGFR — MDRD (mL/min/1.73m²)",
+    "CKDEPI_PRELI":   "eGFR — CKD-EPI alternative",
+    "TSH_PRELI":      "TSH (mU/L)",
+    "HB_PRELI":       "Hemoglobin (g/dL)",
+    "PLT_PRELI":      "Platelets (×10⁹/L)",
+    "QIDSTSC_PRELI":  "QIDS total score (M00)",
+    "BRMSTSC_PRELI":  "BRMS total score (M00)",
+    "BPRSTSC_PRELI":  "BPRS total score (M00)",
+    "SEX":            "Male sex",
+    "FHIST_PLI":      "Family history of BD",
+    "fhist_count":    "Family history — number of relatives",
+    "fhist_ratio_h":  "Family history — proportion of male relatives",
+    "fhist_repli":    "Family history — proportion with positive Li response",
+    "MOOD_PLI":       "Mood stabilizers (2 years before inclusion)",
+    "ANTIPSY_PLI":    "Antipsychotics (2 years before inclusion)",
+    "NEUROL_PLI":     "Neuroleptics (2 years before inclusion)",
+    "ANTIDEP_PLI":    "Antidepressants (2 years before inclusion)",
+    "BENZOS_PLI":     "Benzodiazepines (2 years before inclusion)",
+    "RCY1_PLI":       "Rapid cycling (2 years before inclusion)",
+    "MDE1_PLI":       "Depressive episode total duration (weeks) — 2y",
+    "MDEH1_PLI":      "MDE hospitalized duration (weeks) — 2y",
+    "MDEPS1_PLI":     "MDE with psychotic symptoms duration (weeks) — 2y",
+    "MDEMC1_PLI":     "MDE mixed duration (weeks) — 2y",
+    "PHCMBY_PLI":     "Physical comorbidity",
+    "PSYHLTH_PLI-ComorbiditePsychiatrique": "Psychiatric comorbidity",
+    "response":       "Lithium response (binary: GR vs No_GR)",
 }
 
-# Suppression des anciennes variables
-final_data = final_data.drop(columns=Variables_supp_in_final_data)
 
-# Renommage des variables restantes
-final_data = final_data.rename(columns=rename_dict)
+# 3. DATA LOADING
 
-final_data = final_data.rename(columns={
-    "PSYHLTH_PLI-ComorbiditePsychiatrique": "Psychiatric_Comorbidity"
-})
+def load_raw_data(input_dir: str, input_supp: str) -> dict:
+    """
+    Load all raw source files and return them as a dictionary of DataFrames.
 
+    Parameters
+    ----------
+    input_dir  : str — path to the R-Link eCRF directory
+    input_supp : str — path to the supplementary Excel file (F. Bellivier 2026)
 
-## Merging response variable and base
+    Returns
+    -------
+    dict with keys: 'inclusion', 'baseline', 'visits', 'medications',
+                    'family_history', 'outcome', 'supplementary'
+    """
+    data = {}
 
-final_data = pd.merge(
-    final_data, 
-    Response[["participant_id", "response"]], 
-    on='participant_id', 
-    how='inner'
-)
-assert final_data.shape == (138, 299)  #30 individuals have no value for the response variable.
+    data["inclusion"] = pd.read_csv(
+        input_dir + "dataset-clinical_mod-inclusion_version-3.tsv",
+        sep="\t", na_values=["ND"]
+    )
+    data["baseline"] = pd.read_csv(
+        input_dir + "dataset-clinical_mod-baseline_version-3.tsv",
+        sep="\t", na_values=["ND"]
+    )
+    data["visits"] = pd.read_csv(
+        input_dir + "dataset-clinical_mod-visits_form-visit_version-3.tsv",
+        sep="\t", na_values=["ND"]
+    )
+    data["medications"] = pd.read_csv(
+        input_dir + "dataset-clinical_mod-baseline_form-preLi_tab-med_version-3.tsv",
+        sep="\t"
+    )
+    data["family_history"] = pd.read_csv(
+        input_dir + "dataset-clinical_mod-baseline_form-postLi_tab-famhist_version-3.tsv",
+        sep="\t", na_values=["ND"]
+    )
+    data["outcome"] = pd.read_csv(
+        input_dir + "dataset-outcome_version-4.tsv",
+        sep="\t"
+    )
 
-final_data= final_data.replace('ND',np.nan) #Replace 'ND' values with NaN as they represent missing data
-final_data[["MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI"]] = (
-    final_data[["MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI"]]
-    .replace(9, np.nan)
-)
-final_data[["RCY1_PLI","RCY2_PLI"]] = (
-    final_data[["RCY1_PLI","RCY2_PLI"]]
-    .replace(2, np.nan)
-)
+    # Supplementary file: first row is the real header
+    supp = pd.read_excel(input_supp)
+    assert supp.shape == (169, 32), f"Unexpected supp shape: {supp.shape}"
+    supp.columns = supp.iloc[0]
+    supp = supp.drop(supp.index[0])
+    data["supplementary"] = supp
 
-### Filter columns based on missing valeu percentage
-final_data.apply(lambda x: (x.isna().mean())*100, axis = 0)
-
-## Selecting an arbitrary threshold of missing values
-
-threshold = 0.4
-final_data.columns[final_data.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
-
-total = len(final_data.columns)
-
-## plot of number of features remaining depending on the chosen thresold 
-values_thresholds = np.arange(0.0, 1.0, 0.01)
-
-dict_values = {key:0 for key in values_thresholds}
-
-for key in dict_values.keys():
-    n = len(final_data.columns[final_data.apply(lambda x: x.isna().mean(), axis = 0) > key])
-    dict_values[key] = total - n
-
-
-df = pd.DataFrame.from_dict(dict_values, orient = "index", dtype = float)
-
-df.reset_index(inplace = True)
-df['new_index'] = 1 - df['index']
-df.set_index("new_index", inplace = True)
-df.drop("index", axis =1, inplace = True )
+    return data
 
 
-sns.lineplot(df)
-plt.ylabel("Features remaining")
-plt.xlabel('Ratio of NAs (threshold)')
-plt.legend('')
-#plt.savefig('pourcentage des missing value par colonnes')
-plt.grid()
+# 4. OUTCOME VARIABLE
 
-#Choosing a threshold for missing values 
-threshold = 0.4
-cols_to_drop = final_data.columns[final_data.apply(lambda x: x.isna().mean(), axis = 0) > threshold]
-df_final = final_data.drop(cols_to_drop, axis = 1)
-df_final.info()
+def build_outcome(outcome_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build the binary lithium response label from the raw outcome file.
 
-assert df_final.shape == (138, 210) 
+    Classification:
+      - GR  (Good Responder)     → kept as "GR"
+      - PaR (Partial Responder)  → recoded as "No_GR"
+      - NR  (Non Responder)      → recoded as "No_GR"
+      - UC  (Unclassified)       → excluded
 
+    The final column 'response' is label-encoded: 0 = GR, 1 = No_GR.
 
-###Missing_per row
+    Parameters
+    ----------
+    outcome_df : raw outcome DataFrame (must contain
+                 'Response.Status.at.end.of.follow.up')
 
-missing_rate = df_final.isnull().mean(axis=1)
-max_missin = missing_rate.max()
+    Returns
+    -------
+    DataFrame with columns ['participant_id', 'response']
+    """
+    label_col = "Response.Status.at.end.of.follow.up"
 
-# Plot the distribution of missing rates per row
-plt.figure(figsize=(10, 6))
-plt.hist(missing_rate, bins=30, color='skyblue', edgecolor='black')
-plt.title('Distribution of Missing Values per Row')
-plt.xlabel('Missing Rate (Percentage)')
-plt.ylabel('Number of Rows')
-plt.legend()
-# plt.savefig('distribution des valeurs manquantes par ligne')
-plt.show()
+    # Visualise raw distribution
+    sns.countplot(x=label_col, data=outcome_df)
+    plt.title("Lithium response status — raw")
+    plt.ylabel("Count")
+    plt.xlabel("Status")
+    plt.tight_layout()
+    plt.show()
 
-# the maximum is 37.14% -> Keep all observations
+    print("Raw distribution:\n", outcome_df[label_col].value_counts())
 
+    # Keep only classified subjects
+    classified = outcome_df[outcome_df[label_col].isin(["GR", "PaR", "NR"])].copy()
+    classified = classified[["participant_id", label_col]].rename(
+        columns={label_col: "response"}
+    )
 
-statistic_df = df_final.copy()
+    # Recode to binary
+    classified.loc[classified["response"].isin(["PaR", "NR"]), "response"] = "No_GR"
+    assert set(classified["response"].unique()) == {"GR", "No_GR"}, \
+        "Unexpected values after binary recoding"
 
+    le = LabelEncoder()
+    classified["response"] = le.fit_transform(classified["response"])
+    # Label encoding result: 0 = GR, 1 = No_GR
 
+    # Visualise binary distribution
+    sns.countplot(x="response", data=classified)
+    plt.title("Lithium response — binary (0=GR, 1=No_GR)")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    plt.show()
 
-
-
-'''
-
-### Imputation
-
-binary_cols = [
-    "CENTERNUM", "SEX", "MIX_PRELI", "JOB_PRELI", "EVNT_PRELI", "TSH_PRELI",
-    "MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI", "ANTIDEP_PLI", "BENZOS_PLI","CURRMED_PRELI",
-    "HYPOE1_PLI", "SSRS1_PRELI", "SSRS2_PRELI","RCY1_PLI","RCY2_PLI","Psychiatric_Comorbidity",
-    "TRQ_PRELI", "TRQ1_PRELI","HOSP_PRELI","MOODYN_PRELI","FHIST_PLI", "SmokingStatus-WHOA1A_PLI",
-    "WHOA1B_PLI", "WHOA1C_PLI", "WHOA1D_PLI","SSRS6_PRELI",
-    "WHOA1E_PLI", "WHOA1F_PLI", "WHOA1G_PLI","PHCMBY_PLI-ComorbiditeSomatique","WHOA1H_PLI",
-    "BMI_M00", "DensityHospit", "SuicideAttempts(Yes/No)","TRQ2_PRELI",
-    "MARS1_PRELI", "MARS2_PRELI", "MARS3_PRELI", "MARS4_PRELI", "MARS5_PRELI", "MARS6_PRELI",
-      "MARS7_PRELI", "MARS8_PRELI", "MARS9_PRELI", "MARS10_PRELI",
-]
-
-continuous_cols = [
-    "AGE",  "WEIGHT_PRELI", "HEIGHT_PRELI", "WAIST_PRELI","SBP_PRELI", 
-     "NA_PRELI", "K_PRELI", "CA_PRELI", "UREA_PRELI","BPRSTSC_PRELI",
-    "CREAT_PRELI", "EGFR_PRELI", "MDRD_PRELI", "CKDEPI_PRELI",
-     "MDE1_PLI", "MDEH1_PLI", "MDEPS1_PLI", "MDEMC1_PLI", "MDETD1_PLI",
-    "MANE1_PLI", "MANEH1_PLI", "MANEPS1_PLI", "MANEMC1_PLI", "MANETD1_PLI",
-    "NBH1_PLI", "TDH1_PLI", "AD1_PLI", "SUD1_PLI","AGEMANE2_PLI",
-     "MDE2_PLI", "MDEH2_PLI", "MDEPS2_PLI", "MDEMC2_PLI", "MDETD2_PLI","AGEMDE2_PLI",
-    "HYPOEH2_PLI", "HYPOEMC2_PLI", "HYPOETD2_PLI", "AGEHYPOE2_PLI",
-    "MANE2_PLI", "MANEH2_PLI", "MANEPS2_PLI", "MANEMC2_PLI", "MANETD2_PLI",
-    "NbHospitalizationsLifetime", "TDH2_PLI", "AGESTBH2_PLI", "AD2_PLI", "SUD2_PLI", "MC2_PLI",
-    "QIDS_TotalScore_M00", "BRMS_TotalScore_M00","HYPOEH1_PLI", "HYPOEMC1_PLI", "HYPOETD1_PLI",
-    "BMQ_NECESSITY", "BMQ_PREOCCUPATION", "BMQ_DIFFERENTIAL", "BMQ_GENERAL",
-    "fhist_count", "fhist_ratio_h", "fhist_repli","DensityEpisodes",
-    "AgeAtOnset", "NumberPreviousEpisodes", "DurationIllness",
-]
+    return classified
 
 
+# 5. FEATURE ENGINEERING
+
+def compute_bmq_subscores(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute the four BMQ (Beliefs about Medicines Questionnaire) subscores
+    from the 18 individual items and add them as new columns.
+
+    Subscores:
+      BMQ_NECESSITY      : items 1–5  (specific necessity)
+      BMQ_PREOCCUPATION  : items 6–10 (specific concerns)
+      BMQ_DIFFERENTIAL   : necessity minus concerns (adherence predictor)
+      BMQ_GENERAL        : items 11–18 (general beliefs)
+    """
+    bmq_items = {
+        "BMQ_NECESSITY":     [f"BMQ{i}_PRELI" for i in range(1, 6)],
+        "BMQ_PREOCCUPATION": [f"BMQ{i}_PRELI" for i in range(6, 11)],
+        "BMQ_GENERAL":       [f"BMQ{i}_PRELI" for i in range(11, 19)],
+    }
+    df["BMQ_NECESSITY"]    = df[bmq_items["BMQ_NECESSITY"]].sum(axis=1)
+    df["BMQ_PREOCCUPATION"]= df[bmq_items["BMQ_PREOCCUPATION"]].sum(axis=1)
+    df["BMQ_DIFFERENTIAL"] = df["BMQ_NECESSITY"] - df["BMQ_PREOCCUPATION"]
+    df["BMQ_GENERAL"]      = df[bmq_items["BMQ_GENERAL"]].sum(axis=1)
+    return df
 
 
-ordinal_cols = [
-    "DBP_PRELI",          
-    "SCHOOL_PRELI",       
-    "OUTW1_PLI",    
-    "NBS1_PLI",       
-    "MC1_PLI",           
-    "HYPOE2_PLI",       
-    "OUTW2_PLI", 
-    "NBS2_PLI",        
-    "MARS_TOTAL",         
-    "TRQ5_PRELI",         
-    "TRQ7_PRELI",         
-    "TRQ4_PRELI",
-    "TRQ6_PRELI",
-    "BMQ1_PRELI", "BMQ2_PRELI", "BMQ3_PRELI", "BMQ4_PRELI", "BMQ5_PRELI", "BMQ6_PRELI", 
-    "BMQ7_PRELI", "BMQ8_PRELI", "BMQ9_PRELI", "BMQ10_PRELI", "BMQ11_PRELI", 
-    "BMQ12_PRELI", "BMQ13_PRELI", "BMQ14_PRELI", "BMQ15_PRELI", "BMQ16_PRELI", "BMQ17_PRELI", "BMQ18_PRELI",
-]
+def compute_mars_total(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute the MARS (Medication Adherence Rating Scale) total score
+    by summing all 10 individual items.
+    """
+    mars_cols = [col for col in df.columns if col.startswith("MARS")]
+    df["MARS_TOTAL"] = df[mars_cols].sum(axis=1)
+    return df
 
 
-nominal_cols = [
-    "TYPEP_PRELI",    
-    "RELSTAT_PRELI", 
-    "ETHNICITY_PRELI", 
-    "CORG_PRELI",       
-    "LIVSIT_PRELI",     
-    "RESIDENCE_PRELI",
-]
+def compute_family_history_features(fhist_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate the family history table into three participant-level features:
+
+      fhist_count   : total number of relatives with psychiatric history
+      fhist_ratio_h : proportion of male relatives (SEX_FH == 1)
+      fhist_repli   : proportion of relatives with positive lithium response
+                      (REPLI_FM == 1)
+
+    Parameters
+    ----------
+    fhist_df : raw family history DataFrame (one row per relative)
+
+    Returns
+    -------
+    DataFrame indexed by participant_id with the three new features
+    """
+    fhist_count   = fhist_df.groupby("participant_id").size()
+    fhist_count.name = "fhist_count"
+
+    fhist_ratio_h = fhist_df.groupby("participant_id")["SEX_FH"].apply(
+        lambda x: (x == 1.0).mean()
+    )
+    fhist_ratio_h.name = "fhist_ratio_h"
+
+    fhist_repli   = fhist_df.groupby("participant_id")["REPLI_FM"].apply(
+        lambda x: (x == 1.0).mean()
+    )
+    fhist_repli.name = "fhist_repli"
+
+    return pd.concat([fhist_count, fhist_ratio_h, fhist_repli], axis=1)
+
+
+# 6. DATA CLEANING
+
+def clean_raw_values(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply domain-specific cleaning rules before imputation:
+
+      - FHIST_PLI: recode 9 → 0 (no family history, not "unknown")
+      - MOOD_PLI / ANTIPSY_PLI / NEUROL_PLI / ANTIDEP_PLI / BENZOS_PLI:
+          recode 9 → NaN  (9 = "not applicable" in eCRF coding)
+      - RCY1_PLI / RCY2_PLI:
+          recode 2 → NaN  (2 = "not assessed")
+      - Any remaining "ND" string → NaN
+    """
+    df = df.replace("ND", np.nan)
+
+    df["FHIST_PLI"] = df["FHIST_PLI"].replace(9.0, 0.0)
+
+    medication_history_cols = ["MOOD_PLI", "ANTIPSY_PLI", "NEUROL_PLI",
+                                "ANTIDEP_PLI", "BENZOS_PLI"]
+    df[medication_history_cols] = df[medication_history_cols].replace(9, np.nan)
+
+    rapid_cycling_cols = ["RCY1_PLI", "RCY2_PLI"]
+    df[rapid_cycling_cols] = df[rapid_cycling_cols].replace(2, np.nan)
+
+    return df
+
+
+def drop_high_missingness_columns(df: pd.DataFrame,
+                                  threshold: float = 0.40) -> pd.DataFrame:
+    """
+    Drop any column where the proportion of missing values exceeds `threshold`.
+
+    Default threshold is 40 %, chosen after visual inspection of the
+    missingness curve (see plot_missingness_curve).
+    After filtering, the maximum per-row missing rate is ~37 % → all rows retained.
+
+    Parameters
+    ----------
+    df        : input DataFrame
+    threshold : float in [0, 1] — columns with NaN rate > threshold are dropped
+
+    Returns
+    -------
+    Filtered DataFrame
+    """
+    cols_to_drop = df.columns[df.isnull().mean() > threshold]
+    print(f"Dropping {len(cols_to_drop)} columns with >{threshold:.0%} missing values.")
+    return df.drop(columns=cols_to_drop)
+
+
+def plot_missingness_curve(df: pd.DataFrame) -> None:
+    """
+    Plot the number of features retained as a function of the
+    missing-value threshold. Useful for choosing the threshold
+    passed to drop_high_missingness_columns().
+    """
+    thresholds   = np.arange(0.0, 1.0, 0.01)
+    n_retained   = [
+        (df.isnull().mean() <= t).sum() for t in thresholds
+    ]
+    plt.figure()
+    plt.plot(1 - thresholds, n_retained)
+    plt.xlabel("Maximum allowed NA rate (threshold)")
+    plt.ylabel("Number of features retained")
+    plt.title("Feature retention vs. missing-value threshold")
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
 
 
 
 
-mode_imputer = SimpleImputer(strategy="most_frequent")
-df_final[binary_cols] = mode_imputer.fit_transform(df_final[binary_cols])
+# 8. MAIN PIPELINE
+
+def main():
+    # ------------------------------------------------------------------
+    # 8.1  Load raw data
+    # ------------------------------------------------------------------
+    raw = load_raw_data(INPUT_DIR, INPUT_SUPP)
+
+    # ------------------------------------------------------------------
+    # 8.2  Select columns from each source file
+    # ------------------------------------------------------------------
+    inclusion_df = raw["inclusion"][["participant_id", "CENTERNUM", "SEX", "AGE"]]
+    assert inclusion_df.shape == (168, 4)
+
+    baseline_df = raw["baseline"][
+        BASELINE_VARS_CLINICAL + BASELINE_VARS_QUESTIONNAIRES
+    ]
+    assert baseline_df.shape == (168, 162)
+
+    # M03 visit: keep only 3-month timepoint and rename columns with _M03 suffix
+    m03_df = raw["visits"][raw["visits"]["VISCODE"] == "M3"][VISIT_M03_VARS].copy()
+    m03_df = m03_df.rename(
+        columns={col: f"{col}_M03" for col in m03_df.columns if col != "participant_id"}
+    )
+
+    # Outcome
+    response_df = build_outcome(raw["outcome"])
+
+    # ------------------------------------------------------------------
+    # 8.3  Feature engineering
+    # ------------------------------------------------------------------
+
+    # Merge inclusion + baseline
+    data = pd.merge(inclusion_df, baseline_df, on="participant_id", how="inner")
+    assert data.shape == (168, 165)
+
+    # BMQ subscores
+    data = compute_bmq_subscores(data)
+
+    # MARS total
+    data = compute_mars_total(data)
+
+    # Family history aggregated features
+    fhist_features = compute_family_history_features(raw["family_history"])
+    data = data.merge(fhist_features, on="participant_id", how="left")
+    data[["fhist_count", "fhist_ratio_h", "fhist_repli"]] = (
+        data[["fhist_count", "fhist_ratio_h", "fhist_repli"]].fillna(0)
+    )
+    assert data.shape == (168, 173)
+
+    # Add M03 visit data
+    data = pd.merge(data, m03_df, on="participant_id", how="left")
+    assert data.shape == (168, 280)
+
+    # ------------------------------------------------------------------
+    # 8.4  Merge supplementary data (F. Bellivier 2026)
+    # ------------------------------------------------------------------
+    supp_vars = list(set(SUPP_VARS_TO_KEEP_RAW) - set(SUPP_VARS_TO_DROP))
+    supp_df   = raw["supplementary"]
+
+    # Convert numeric supplementary columns before merge
+    for col in supp_df.columns:
+        supp_df[col] = pd.to_numeric(supp_df[col], errors="ignore")
+
+    # Sanity check: AGE and SEX must be consistent between the two sources
+    fd_idx   = data.set_index("participant_id").sort_index()
+    supp_idx = supp_df.set_index("participant_id").sort_index()
+    fd_idx, supp_idx = fd_idx.align(supp_idx)
+    inconsistent = fd_idx["AGE"].ne(supp_idx["AGE"]) | fd_idx["SEX"].ne(supp_idx["SEX"])
+    assert not inconsistent.any(), \
+        f"AGE/SEX mismatch between sources for: {fd_idx.index[inconsistent].tolist()}"
+
+    data = data.merge(supp_df[supp_vars], on="participant_id", how="inner")
+    assert data.shape == (168, 303)
+
+    # ------------------------------------------------------------------
+    # 8.5  Deduplicate redundant columns
+    # ------------------------------------------------------------------
+    # The supplementary file contains derived versions of columns already in
+    # the baseline. We keep the supplementary version (more processed) and
+    # drop / rename accordingly.
+
+    REDUNDANT_BASELINE_COLS = {
+        # baseline column          → supplementary equivalent
+        "PHCMBY_PLI":              "PHCMBY_PLI-ComorbiditeSomatique",
+        "QIDSTSC_PRELI":           "QIDS_TotalScore_M00",
+        "BRMSTSC_PRELI":           "BRMS_TotalScore_M00",
+        "NBH2_PLI":                "NbHospitalizationsLifetime",
+        "WHOA1A_PLI":              "SmokingStatus-WHOA1A_PLI",
+    }
+
+    # Drop the supplementary versions first (will be replaced by rename)
+    data = data.drop(columns=list(REDUNDANT_BASELINE_COLS.values()), errors="ignore")
+    # Rename baseline columns to the agreed canonical names
+    data = data.rename(columns=REDUNDANT_BASELINE_COLS)
+    data = data.rename(
+        columns={"PSYHLTH_PLI-ComorbiditePsychiatrique": "Psychiatric_Comorbidity"}
+    )
+
+    # ------------------------------------------------------------------
+    # 8.6  Merge outcome and filter to classified subjects
+    # ------------------------------------------------------------------
+    data = pd.merge(data, response_df[["participant_id", "response"]],
+                    on="participant_id", how="inner")
+    # 30 subjects have no outcome value → they are excluded here
+    assert data.shape == (138, 299), f"Unexpected shape after outcome merge: {data.shape}"
+
+    # ------------------------------------------------------------------
+    # 8.7  Clean raw values
+    # ------------------------------------------------------------------
+    data = clean_raw_values(data)
+
+    # ------------------------------------------------------------------
+    # 8.8  Remove high-missingness columns
+    # ------------------------------------------------------------------
+    plot_missingness_curve(data)
+    data = drop_high_missingness_columns(data, threshold=0.40)
+    assert data.shape == (138, 210), f"Unexpected shape after missingness filter: {data.shape}"
+
+    # ------------------------------------------------------------------
+    # 8.9 Create datasets for analyses
+    # ------------------------------------------------------------------
+
+    m03_columns = [c for c in data.columns if c.endswith("_M03")]
+
+    # M00 only
+    data_m00 = data.drop(columns=m03_columns).copy()
+
+    # M03 only
+    m03_keep = ["participant_id", "response"] + m03_columns
+    data_m03 = data[m03_keep].copy()
+
+    # Global dataset
+    data_global = data.copy()
+
+    # Optional: rename columns only after dataset creation
+    data_m00 = data_m00.rename(columns=COLUMN_LABELS)
+    data_m03 = data_m03.rename(columns=COLUMN_LABELS)
+    data_global = data_global.rename(columns=COLUMN_LABELS)
+    # ------------------------------------------------------------------
+    # 8.10 Save datasets
+    # ------------------------------------------------------------------
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    data_m00.to_excel(
+        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M00_v20260602.xlsx",
+        index=False
+    )
+
+    data_m03.to_excel(
+        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M03_v20260602.xlsx",
+        index=False
+    )
+
+    data_global.to_excel(
+        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M00_M03_v20260602.xlsx",
+        index=False
+    )
+
+    print(f"M00 dataset saved: {data_m00.shape}")
+    print(f"M03 dataset saved: {data_m03.shape}")
+    print(f"M00+M03 dataset saved: {data_global.shape}")
 
 
-df_final[nominal_cols] = mode_imputer.fit_transform(df_final[nominal_cols])
 
-median_imputer = SimpleImputer(strategy="median")
-df_final[continuous_cols] = median_imputer.fit_transform(df_final[continuous_cols])  
+# ENTRY POINT
 
-mode_imputer = SimpleImputer(strategy="most_frequent")
-df_final[ordinal_cols] = mode_imputer.fit_transform(df_final[ordinal_cols])
-
-
-print(df_final.isnull().sum().sum()) 
-
-
-'''
+if __name__ == "__main__":
+    main()
 
 
 
 
-# Rename columns
-
-labels={"MOODYN_PRELI": "Current mood episode (MOODYN_PRELI)",
-        "TYPEP_PRELI": "Type of episode (TYPEP_PRELI)",
-        "PS_PRELI": 'With psychotic sympt. (PS_PRELI)',
-        "MIX_PRELI": "With mixed characteristics (MIX_PRELI)",
-        "HOSP_PRELI": "Currently hospitalized (HOSP_PRELI)",
-        "WEIGHT_PRELI":"Weight (WEIGHT_PRELI)",
-        "HEIGHT_PRELI":"Height (HEIGHT_PRELI)",
-        "SBP_PRELI":"Systolic BP (SBP_PRELI)",
-        "DBP_PRELI":"Diastolic BP (DBP_PRELI)",
-        "RELSTAT_PRELI": "Relationship status (RELSTAT_PRELI)",
-        "ETHNICITY_PRELI": "Ethnicity (ETHNICITY_PRELI)",
-        "CORG_PRELI": "Country of Origin (CORG_PRELI)",
-        "LIVSIT_PRELI": "Living situation (LIVSIT_PRELI)",
-        "RESIDENCE_PRELI": "Place of Residence (RESIDENCE_PRELI)",
-        "SCHOOL_PRELI": "Highest qualification (SCHOOL_PRELI)",
-        "JOB_PRELI": "Employment status (JOB_PRELI)",
-        "EVNT_PRELI": "Recent stressful events inf. 12 mo (EVNT_PRELI)",
-        "CURRMED_PRELI": "Current medications (CURRMED_PRELI)",
-        "NA_PRELI": "Sodium (NA_PRELI)",
-        'K_PRELI': 'Potassium (K_PRELI)',
-        'CL_PRELI': "Chlore (CL_PRELI)",
-        'CA_PRELI': "Calcium (CA_PRELI)",
-        "PROTEINS_PRELI": "Proteins (PROTEINS_PRELI)",
-        "UREA_PRELI": "Urea (UREA_PRELI)",
-        "CREAT_PRELI": "Creatinine (CREAT_PRELI)",
-        "EGFR_PRELI": "Glomerular filtration rate (EGFR)(EGFR_PRELI)",
-        "MDRD_PRELI": "Glomerular filtration rate (EGFR) MDRD (MDRD_PRELI)",
-        'CKDEPI_PRELI': "Glomerular filtration rate (EGFR) (CKDEPI_PRELI)",
-        "TSH_PRELI": "TSH (TSH_PRELI)",
-        'HB_PRELI': "Hemoglobin (HB_PRELI)",
-        "PLT_PRELI": "PLatelets (PLT_PRELI)",
-        "QIDSTSC_PRELI":"QIDS Total (QIDSTSC_PRELI)",
-        "BRMSTSC_PRELI": 'BRMS Total (BRMSTSC_PRELI)',
-        "BPRSTSC_PRELI": "BPRS Total (BPRSTSC_PRELI)",
-        'SEX': "Male sex",
-        "response": "Lithium Response (4 levels)",
-        "FHIST_PLI": "Family history",
-        "fhist_count":"F.hist absolute count",
-        "fhist_ratio_h": "F.Hist male ratio",
-        "fhist_repli": "F.Hist positive lithium response",
-        "MOOD_PLI": "Mood stabilizers - 2y",
-        "ANTIPSY_PLI": "Antipsychotics - 2y",
-        "NEUROL_PLI": "Neuroleptics - 2y",
-        "ANTIDEP_PLI": "Antidepressants - 2y",
-        "BENZOS_PLI": "Benzodiazepines - 2y",
-        "PHCMBY_PLI": "Physical comorbidity",
-        "RCY1_PLI": "Rapid cycling - 2y",
-        "MDE1_PLI":"Depressive. ep. total duration (w) -2y",
-        "MDEH1_PLI": 'MDE hospitalized -duration (w)-2y',
-        "MDEPS1_PLI": "MDE psychotic symptoms duration (w)- 2y",
-        "MDEMC1_PLI": "MDE mixed duration (w) - 2y"   
-        }
-
-df_final= df_final.rename(columns = labels)
-statistic_df = statistic_df.rename(columns = labels)
-# %% 3. Save to excel file
-#
-statistic_df.to_excel(OUTPUT + "statistic_data.xlsx", index=False)  # Rlink clinical baseline data (M00) without imputation
-df_final.to_excel(OUTPUT + "Clinical_data_M00.xlsx", index=False)   # Rlink clinical baseline data (M00) with imputation
 
 
-# enregistrer une base de donnee M00M03 sans imputaion 
-# enregistrer une base de donnee M00M03 avec imputaion 
-# enregistrer une base de donnee M00 sans imputaion 
-# enregistrer une base de donnee M00 avec imputaion 
 
-
-# %%
