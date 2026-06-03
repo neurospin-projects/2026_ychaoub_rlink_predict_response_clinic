@@ -661,18 +661,18 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    data_m00.to_excel(
-        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M00_v20260602.xlsx",
+    data_m00.to_csv(
+        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M00_v20260602.csv",
         index=False
     )
 
-    data_m03.to_excel(
-        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M03_v20260602.xlsx",
+    data_m03.to_csv(
+        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M03_v20260602.csv",
         index=False
     )
 
-    data_global.to_excel(
-        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M00_M03_v20260602.xlsx",
+    data_global.to_csv(
+        OUTPUT_DIR + "Rlink_version3_type_Clinic_timepoint_M00_M03_v20260602.csv",
         index=False
     )
 
