@@ -1,0 +1,77 @@
+
+{
+  "Clinical — M03": [
+    "WEIGHT_M03",
+    "WAIST_M03",
+    "BMI_M03",
+    "SBP_M03",
+    "DBP_M03",
+    "CURRMED_M03"
+  ],
+  "Biological — M03": [
+    "CREAT_M03",
+    "MDRD_M03",
+    "CKDEPI_M03"
+  ],
+  "QIDS / BRMS / SSRS / BPRS — M03": [
+    "QIDS_W1_M03",
+    "BRMS_W1_M03",
+    "SSRS1_M03",
+    "SSRS2_M03",
+    "SSRS6_M03",
+    "BPRSTSC_M03"
+  ],
+  "MARS (medication adherence) — M03": [
+    "MARS1V_M03",
+    "MARS2V_M03",
+    "MARS3V_M03",
+    "MARS4V_M03",
+    "MARS5V_M03",
+    "MARS6V_M03",
+    "MARS7V_M03",
+    "MARS8V_M03",
+    "MARS9V_M03",
+    "MARS10V_M03"
+  ],
+  "TRQ (medication adherence) — M03": [
+    "TRQ_M03",
+    "TRQ1_M03",
+    "TRQ2_M03",
+    "TRQ3_M03",
+    "TRQ4_M03",
+    "TRQ5_M03",
+    "TRQ6_M03",
+    "TRQ7_M03"
+  ],
+  "BMQ (belief in medication) — M03": [
+    "BMQ1_M03",
+    "BMQ2_M03",
+    "BMQ3_M03",
+    "BMQ4_M03",
+    "BMQ5_M03",
+    "BMQ6_M03",
+    "BMQ7_M03",
+    "BMQ8_M03",
+    "BMQ9_M03",
+    "BMQ10_M03",
+    "BMQ11_M03",
+    "BMQ12_M03",
+    "BMQ13_M03",
+    "BMQ14_M03",
+    "BMQ15_M03",
+    "BMQ16_M03",
+    "BMQ17_M03",
+    "BMQ18_M03"
+  ],
+  "Delta — medication changes": [
+    "DeltaATD",
+    "DeltaAPA",
+    "DeltaBZD",
+    "DeltaNLP",
+    "DeltaAC"
+  ],
+  "Delta — anthropometric": [
+    "DeltaBMI",
+    "Delta_BMI_impute"
+  ]
+}
