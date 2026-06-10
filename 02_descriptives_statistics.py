@@ -445,7 +445,7 @@ def run_univariate(
     print(f"Saved → {excel_path}")
 
     # ── Manhattan plot ────────────────────────────────────────────────────
-    plot_path = os.path.join(SCRIPT_DIR, "reports", f"manhattan_{timepoint}.png")
+    plot_path = os.path.join(SCRIPT_DIR, "reports", f"statistics_manhattan_{timepoint}.png")
     manhattan_plot(
         stats_df      = grouped,
         category_dict = category_dict,

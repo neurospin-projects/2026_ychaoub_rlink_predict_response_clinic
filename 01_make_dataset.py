@@ -206,61 +206,6 @@ SUPP_VARS_TO_DROP = [
     "DISRDR-Trouble_n°2etplus",
 ]
 
-# --- 2.4 Human-readable column labels (for final output) ---
-COLUMN_LABELS = {
-    "MOODYN_PRELI":   "Current mood episode",
-    "TYPEP_PRELI":    "Type of episode",
-    "PS_PRELI":       "With psychotic symptoms",
-    "MIX_PRELI":      "With mixed characteristics",
-    "HOSP_PRELI":     "Currently hospitalized",
-    "WEIGHT_PRELI":   "Weight (kg)",
-    "HEIGHT_PRELI":   "Height (cm)",
-    "SBP_PRELI":      "Systolic BP (mmHg)",
-    "DBP_PRELI":      "Diastolic BP (mmHg)",
-    "RELSTAT_PRELI":  "Relationship status",
-    "ETHNICITY_PRELI":"Ethnicity",
-    "CORG_PRELI":     "Country of origin",
-    "LIVSIT_PRELI":   "Living situation",
-    "RESIDENCE_PRELI":"Place of residence",
-    "SCHOOL_PRELI":   "Highest qualification",
-    "JOB_PRELI":      "Employment status",
-    "EVNT_PRELI":     "Recent stressful event (<12 months)",
-    "CURRMED_PRELI":  "Current medications",
-    "NA_PRELI":       "Sodium (mmol/L)",
-    "K_PRELI":        "Potassium (mmol/L)",
-    "CL_PRELI":       "Chloride (mmol/L)",
-    "CA_PRELI":       "Calcium (mmol/L)",
-    "PROTEINS_PRELI": "Proteins (g/L)",
-    "UREA_PRELI":     "Urea (mmol/L)",
-    "CREAT_PRELI":    "Creatinine (µmol/L)",
-    "EGFR_PRELI":     "eGFR — CKD-EPI (mL/min/1.73m²)",
-    "MDRD_PRELI":     "eGFR — MDRD (mL/min/1.73m²)",
-    "CKDEPI_PRELI":   "eGFR — CKD-EPI alternative",
-    "TSH_PRELI":      "TSH (mU/L)",
-    "HB_PRELI":       "Hemoglobin (g/dL)",
-    "PLT_PRELI":      "Platelets (×10⁹/L)",
-    "QIDSTSC_PRELI":  "QIDS total score (M00)",
-    "BRMSTSC_PRELI":  "BRMS total score (M00)",
-    "BPRSTSC_PRELI":  "BPRS total score (M00)",
-    "SEX":            "Male sex",
-    "FHIST_PLI":      "Family history of BD",
-    "fhist_count":    "Family history — number of relatives",
-    "fhist_ratio_h":  "Family history — proportion of male relatives",
-    "fhist_repli":    "Family history — proportion with positive Li response",
-    "MOOD_PLI":       "Mood stabilizers (2 years before inclusion)",
-    "ANTIPSY_PLI":    "Antipsychotics (2 years before inclusion)",
-    "NEUROL_PLI":     "Neuroleptics (2 years before inclusion)",
-    "ANTIDEP_PLI":    "Antidepressants (2 years before inclusion)",
-    "BENZOS_PLI":     "Benzodiazepines (2 years before inclusion)",
-    "RCY1_PLI":       "Rapid cycling (2 years before inclusion)",
-    "MDE1_PLI":       "Depressive episode total duration (weeks) — 2y",
-    "MDEH1_PLI":      "MDE hospitalized duration (weeks) — 2y",
-    "MDEPS1_PLI":     "MDE with psychotic symptoms duration (weeks) — 2y",
-    "MDEMC1_PLI":     "MDE mixed duration (weeks) — 2y",
-    "PHCMBY_PLI":     "Physical comorbidity",
-    "PSYHLTH_PLI-ComorbiditePsychiatrique": "Psychiatric comorbidity",
-    "response":       "Lithium response (binary: GR vs No_GR)",
-}
 
 
 # 3. DATA LOADING
@@ -552,7 +497,7 @@ def main():
     data = pd.merge(inclusion_df, baseline_df, on="participant_id", how="inner")
     assert data.shape == (168, 165)
 
-    # BMQ subscores
+    # BMQ subscoresdata_global
     data = compute_bmq_subscores(data)
 
     # MARS total
@@ -639,7 +584,10 @@ def main():
     # 8.9 Create datasets for analyses
     # ------------------------------------------------------------------
 
-    m03_columns = [c for c in data.columns if c.endswith("_M03")]
+    m03_columns = [
+        c for c in data.columns
+        if c.endswith("_M03") or c.startswith("Delta")
+    ]
 
     # M00 only
     data_m00 = data.drop(columns=m03_columns).copy()
@@ -651,10 +599,6 @@ def main():
     # Global dataset
     data_global = data.copy()
 
-    # Optional: rename columns only after dataset creation
-    data_m00 = data_m00.rename(columns=COLUMN_LABELS)
-    data_m03 = data_m03.rename(columns=COLUMN_LABELS)
-    data_global = data_global.rename(columns=COLUMN_LABELS)
     # ------------------------------------------------------------------
     # 8.10 Save datasets
     # ------------------------------------------------------------------

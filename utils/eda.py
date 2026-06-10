@@ -350,12 +350,32 @@ def plot_feature_dendrogram(X_df: pd.DataFrame,
       - cluster_df : DataFrame [feature, cluster] with Ward clusters cut at distance 0.4
       - pub        : dict with keys 'methods' and 'results' (ready-to-paste text)
     """
-    features = list(X_df.columns)
-    corr = X_df.corr().abs()
-    dist = 1 - corr
-    np.fill_diagonal(dist.values, 0)
-    linkage = hierarchy.ward(squareform(dist.values))
+    features_orig = list(X_df.columns)
 
+    # Drop constant or near-constant columns (corr would be NaN)
+    X_clean = X_df.loc[:, X_df.std() > 0].copy()
+    features = list(X_clean.columns)
+
+    dropped = set(features_orig) - set(features)
+    if dropped:
+        print(f"⚠  Dropped {len(dropped)} zero-variance column(s): {dropped}")
+
+    corr = X_clean.corr().abs()
+
+    # Handle any remaining NaNs in the correlation matrix (e.g. near-constant cols)
+    corr = corr.fillna(0)
+
+    dist_vals = (1 - corr).values.copy()
+    np.fill_diagonal(dist_vals, 0)
+    dist_vals = (dist_vals + dist_vals.T) / 2
+    np.fill_diagonal(dist_vals, 0)
+    dist_vals = np.clip(dist_vals, 0, 2)  # valid range for 1-|rho| is [0, 1]
+
+    # Sanity check before proceeding
+    assert np.all(np.isfinite(dist_vals)), "Still non-finite values in dist_vals!"
+
+    condensed = squareform(dist_vals, force="tovector", checks=False)
+    linkage = hierarchy.ward(condensed)
     fig, ax = plt.subplots(figsize=(max(10, 0.45 * len(features)), 5))
     hierarchy.set_link_color_palette(_CLUSTER_COLORS)
     ddata = hierarchy.dendrogram(linkage, labels=features,
@@ -437,6 +457,8 @@ def plot_pca_components(X_df: pd.DataFrame,
     evr  = pca.explained_variance_ratio_
     cumev = np.cumsum(evr)
     comps = np.arange(1, len(evr) + 1)
+
+    
 
     elbow_idx     = int(np.argmax(np.diff(np.diff(cumev))) + 2)   # 1-based
     thresh_results = {t: int(np.searchsorted(cumev, t) + 1) for t in var_thresholds}
