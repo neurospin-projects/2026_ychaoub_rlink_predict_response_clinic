@@ -680,7 +680,3 @@ if __name__ == "__main__":
         pub_df.to_excel(writer,            sheet_name="publication_text",   index=False)
     print(f"\n✔  Saved {excel_path}")
 
-
-
-
-# %%

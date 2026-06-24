@@ -51,8 +51,14 @@ from sklearn.metrics import (
     make_scorer, recall_score, balanced_accuracy_score, roc_auc_score,
     accuracy_score
 )
+from tabpfn import TabPFNClassifier
+TABPFN_AVAILABLE = True
 
 warnings.filterwarnings("ignore")
+
+import os
+
+os.environ["TABPFN_TOKEN"] = os.getenv("TABPFN_TOKEN", "")
 
 
 ################################################################################
@@ -288,6 +294,16 @@ def make_models(n_jobs_grid_search=N_JOBS, cv_val=None, scoring="balanced_accura
         ),
     )
 
+    # 8. TabPFN
+    if TABPFN_AVAILABLE:
+        models["TabPFN"] =TabPFNClassifier(
+                device="cpu",
+                n_estimators=32,
+                random_state=RANDOM_STATE,
+            
+        )
+    else:
+        print("[WARN] tabpfn non installé — modèle 'TabPFN' exclu.")
     return models
 
 
@@ -362,7 +378,7 @@ assert X.shape[1] == len(feature_columns), "Feature count mismatch after imputat
 
 if __name__ == "__main__":
 
-    cv_val = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+    cv_val = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     models = make_models(n_jobs_grid_search=N_JOBS, cv_val=cv_val, scoring="balanced_accuracy")
 
     # ----- Option A: CV externe StratifiedKFold (pooled OOF)

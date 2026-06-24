@@ -238,7 +238,6 @@ def classification_report_cv(X: np.ndarray,
     # then average across folds.
 
     print("\n━━━  Average-of-folds (AOF) Classification Report ━━━")
-
     y_pred_cv  = np.empty(len(y), dtype=int)
     y_proba_cv = np.empty(len(y))
     ba_fold, auc_fold, prec_fold, f1_fold, mcc_fold = [], [], [], [], []
@@ -249,11 +248,18 @@ def classification_report_cv(X: np.ndarray,
         y_proba_cv[te] = pipe.predict_proba(X[te])[:, 1]
         ba_fold.append(balanced_accuracy_score(y[te], y_pred_cv[te]))
         auc_fold.append(roc_auc_score(y[te], y_proba_cv[te]))
-        prec_fold.append(precision_score(y[te], y_pred_cv[te], zero_division=0))
+        prec_fold.append(precision_score(y[te], y_pred_cv[te], average="binary" , zero_division=0))
         rec_cls_fold.append(recall_score(y[te], y_pred_cv[te], average=None, zero_division=0))
-        f1_fold.append(f1_score(y[te], y_pred_cv[te], zero_division=0))
+        f1_fold.append(f1_score(y[te], y_pred_cv[te], average="binary" , zero_division=0))
         mcc_fold.append(matthews_corrcoef(y[te], y_pred_cv[te]))
 
+    uncovered = np.where(y_pred_cv == -1)[0]
+    if len(uncovered) > 0:
+        raise ValueError(
+            f"{len(uncovered)} sample(s) never received an out-of-fold prediction "
+            f"(indices: {uncovered[:10]}...). The CV splitter does not cover all "
+            f"samples — check that CV_JSON includes every participant_id in X/y."
+        )
     classes    = np.unique(y)
     n_folds    = len(ba_fold)
     N_test     = len(y)
@@ -290,10 +296,10 @@ def classification_report_cv(X: np.ndarray,
     rows = [
         ("Balanced Accuracy", ba_fold,   ba_pooled,                                      ba_pval_pooled,  ba_pval_fold),
         ("ROC-AUC",           auc_fold,  auc_pooled,                                     auc_pval_pooled, auc_pval_fold),
-        ("Precision",         prec_fold, precision_score(y, y_pred_cv, zero_division=0), np.nan,          np.nan),
+        ("Precision",         prec_fold, precision_score(y, y_pred_cv, average="binary" , zero_division=0), np.nan,          np.nan),
         *[(f"Recall (class {cls})", [r[i] for r in rec_cls_fold], rec_pooled[i], rec_pval_pooled[i], rec_pval_fold[i])
           for i, cls in enumerate(classes)],
-        ("F1",                f1_fold,   f1_score(y, y_pred_cv, zero_division=0),        np.nan,          np.nan),
+        ("F1",                f1_fold,   f1_score(y, y_pred_cv, average="binary" , zero_division=0),        np.nan,          np.nan),
         ("MCC",               mcc_fold,  matthews_corrcoef(y, y_pred_cv),                np.nan,          np.nan),
     ]
     metrics_df = pd.DataFrame(

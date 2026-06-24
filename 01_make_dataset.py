@@ -516,7 +516,7 @@ def main():
     assert data.shape == (168, 280)
 
     # ------------------------------------------------------------------
-    # 8.4  Merge supplementary data (F. Bellivier 2026)
+    # 8.4  Merge supplementary data 
     # ------------------------------------------------------------------
     supp_vars = list(set(SUPP_VARS_TO_KEEP_RAW) - set(SUPP_VARS_TO_DROP))
     supp_df   = raw["supplementary"]
